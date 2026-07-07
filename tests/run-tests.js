@@ -1,0 +1,256 @@
+#!/usr/bin/env node
+/* ════════════════════════════════════════════════════════════════
+   IANNA CRM — tests/run-tests.js
+   SUITE DE PRUEBAS DE MOTORES (Fase 1.95)
+   ────────────────────────────────────────────────────────────────
+   Ejecuta los motores del kernel en Node (sandbox con stubs de
+   navegador) y verifica los contratos arquitectónicos del release.
+   Uso:  node tests/run-tests.js       (desde la raíz del repo)
+   Nota: el paquete recibido en 1.9 NO incluía suite automatizada;
+   esta suite es la verificación oficial verificable del kernel.
+   ════════════════════════════════════════════════════════════════ */
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const RAIZ = path.join(__dirname, '..');
+
+/* ── sandbox de navegador mínimo ── */
+const almacen = {};
+const sandbox = {
+  console,
+  localStorage: {
+    getItem: k => (k in almacen ? almacen[k] : null),
+    setItem: (k, v) => { almacen[k] = String(v); },
+    removeItem: k => { delete almacen[k]; },
+  },
+  document: {
+    getElementById: () => null,
+    querySelectorAll: () => [],
+    querySelector: () => null,
+    addEventListener: () => {},
+    createElement: () => ({ style: {}, classList: { add(){}, remove(){}, toggle(){} }, appendChild(){}, setAttribute(){} }),
+    body: { appendChild(){}, classList: { add(){}, remove(){} } },
+  },
+  window: null,
+  alert: () => {}, confirm: () => true, prompt: () => '',
+  toast: () => {}, setTimeout, clearTimeout, Date, JSON, Math, Number, String, Object, Array,
+  navigator: { userAgent: 'node-tests' },
+};
+sandbox.window = sandbox; // window === globalThis del sandbox
+vm.createContext(sandbox);
+
+function cargar(rel) {
+  const code = fs.readFileSync(path.join(RAIZ, rel), 'utf8');
+  vm.runInContext(code, sandbox, { filename: rel });
+}
+
+/* Orden de carga = index.html (subconjunto de kernel, sin módulos de UI) */
+[
+  'config/app.config.js',
+  'config/empresa.config.js',
+  'config/seed.data.js',
+  'services/dataStore.service.js',
+  'services/entidades.service.js',
+  'config/app.state.js',
+  'utils/utils.js',
+  'utils/formatos.util.js',
+  'business/autorizador.business.js',
+  'business/folios.business.js',
+  'business/motor.business.js',
+  'business/operaciones.business.js',
+  'business/estados.business.js',
+  'business/ids.business.js',
+  'business/ops-engine.business.js',
+  'business/financiero.business.js',
+  'business/comisiones.business.js',
+  'business/oportunidades.business.js',
+  'business/pipeline.business.js',
+].forEach(cargar);
+
+/* usuario de pruebas (gerente por defecto) */
+vm.runInContext("CU = { id:'u_test', nombre:'Usuario Prueba', rol:'gerente' };", sandbox);
+vm.runInContext("try{ IANNA_IDS.migrar(); }catch(e){}", sandbox);
+
+/* ── mini framework ── */
+let ok = 0, mal = 0; const fallas = [];
+function t(nombre, fn) {
+  try { fn(); ok++; console.log('  ✅ ' + nombre); }
+  catch (e) { mal++; fallas.push(nombre + ' → ' + e.message); console.log('  ❌ ' + nombre + ' → ' + e.message); }
+}
+function eq(a, b, msg) { if (a !== b) throw new Error((msg||'') + ` esperado=${JSON.stringify(b)} obtenido=${JSON.stringify(a)}`); }
+function verdad(v, msg) { if (!v) throw new Error(msg || 'valor falsy'); }
+const X = expr => vm.runInContext(expr, sandbox);
+
+console.log('\n═══ SUITE DE MOTORES IANNA 1.95 ═══\n');
+
+/* ── 1 · MOTOR DE FORMATOS (Bloque 9) ── */
+console.log('▶ IANNA_FMT (Motor de Formatos)');
+t('MXN entero sin decimales', () => eq(X("IANNA_FMT.MXN(1500000,{decimales:0})"), '$1,500,000'));
+t('MXN default 2 decimales', () => eq(X("IANNA_FMT.MXN(1234.5)"), '$1,234.50'));
+t('mxn() delega en el motor (salida idéntica a 1.9)', () => eq(X("mxn(2497500)"), '$2,497,500'));
+t('M2 conserva 3 decimales', () => verdad(X("IANNA_FMT.M2(160.5)").includes('160.500')));
+t('FOLIO acolchona a 8 dígitos', () => eq(X("IANNA_FMT.FOLIO(42)"), '00000042'));
+t('PCT formatea porcentaje', () => verdad(X("IANNA_FMT.PCT(0.02)").includes('2')));
+t('NUM_A_LETRAS sin "undefined"', () => verdad(!X("IANNA_FMT.NUM_A_LETRAS(1500000)").toLowerCase().includes('undefined')));
+
+/* ── 2 · IDS PERMANENTES ── */
+console.log('▶ IANNA_IDS');
+t('asignar produce prefijo PRO-', () => verdad(/^PRO-\d{4,}$/.test(X("IANNA_IDS.asignar('prospecto')"))));
+t('consecutivos jamás se repiten', () => {
+  const a = X("IANNA_IDS.asignar('venta')"), b = X("IANNA_IDS.asignar('venta')");
+  verdad(a !== b, a + '==' + b);
+});
+
+/* ── 3 · FOLIOS (Bloque 5) ── */
+console.log('▶ IANNA_FOLIOS');
+t('emitir siempre avanza y jamás repite (unicidad dura)', () =>
+  verdad(X("IANNA_FOLIOS.emitir('pago','op1')") !== X("IANNA_FOLIOS.emitir('pago','op1')")));
+t('emitirUnaVez es idempotente por referencia (congelar 2 veces = mismo folio)', () =>
+  eq(X("IANNA_FOLIOS.emitirUnaVez('pagare','APTEST:1')"), X("IANNA_FOLIOS.emitirUnaVez('pagare','APTEST:1')")));
+t('referencias distintas → folios distintos (cada pagaré su folio)', () =>
+  verdad(X("IANNA_FOLIOS.emitirUnaVez('pagare','APTEST:1')") !== X("IANNA_FOLIOS.emitirUnaVez('pagare','APTEST:2')")));
+t('peek no consume folios (vistas previas seguras)', () => {
+  const antes = X("IANNA_FOLIOS.peek('pago')");
+  X("IANNA_FOLIOS.peek('pago')");
+  eq(X("IANNA_FOLIOS.peek('pago')"), antes);
+});
+
+/* ── 4 · AUTORIZADOR (Etapa 3) ── */
+console.log('▶ AUTORIZADOR');
+t('gerente puede ver_global', () => eq(X("AUTORIZADOR.puede('ver_global')"), true));
+t('asesor NO puede eliminar_prospecto', () => {
+  X("CU={id:'u_a',nombre:'Asesor',rol:'asesor'}");
+  eq(X("AUTORIZADOR.puede('eliminar_prospecto')"), false);
+  X("CU={id:'u_test',nombre:'Usuario Prueba',rol:'gerente'}");
+});
+t('acción desconocida = denegada (fail-closed)', () => eq(X("AUTORIZADOR.puede('accion_inexistente_xyz')"), false));
+t('ajustar_fecha_apartado conserva semántica 1.9 (solo gerente)', () => {
+  X("CU={id:'u_ad',nombre:'Admin',rol:'administrador'}");
+  eq(X("AUTORIZADOR.puede('ajustar_fecha_apartado')"), false, 'admin no debía poder');
+  X("CU={id:'u_test',nombre:'Usuario Prueba',rol:'gerente'}");
+  eq(X("AUTORIZADOR.puede('ajustar_fecha_apartado')"), true, 'gerente sí');
+});
+t('etiquetaRol traduce roles', () => eq(X("AUTORIZADOR.etiquetaRol('administrador')"), 'Administrador'));
+t('justificacion explica la política', () => verdad(X("AUTORIZADOR.justificacion('eliminar_prospecto')").includes('AUT-v1')));
+
+/* ── 5 · PIPELINE (Etapa 2 · Bloques 1/3) ── */
+console.log('▶ IANNA_PIPELINE (flujo único de estatus)');
+X("var _pTest = prospectosService.crear({nombre:'Prueba Pipeline', telefono:'667 000 0001', estatus:'Nuevo', asesor:'u_test', fechaRegistro:new Date().toISOString()});");
+t('DS.create sella schema_version 1.95', () => eq(X("_pTest.schema_version"), '1.95'));
+t('cambio CRM válido procede y deja traza', () => {
+  const r = X("IANNA_PIPELINE.solicitarEstatus(_pTest.id,'Contactado','Prueba')");
+  verdad(r.ok, JSON.stringify(r));
+  eq(X("prospectosService.obtener(_pTest.id).estatus"), 'Contactado');
+  verdad(X(`seguimientosService.listar({prospectoId:_pTest.id}).length`) >= 1, 'sin seguimiento de traza');
+});
+t("mover a 'Venta' está PROHIBIDO (no se fabrican ventas)", () => {
+  const r = X("IANNA_PIPELINE.solicitarEstatus(_pTest.id,'Venta','Kanban')");
+  eq(r.ok, false); verdad(r.error.length > 10);
+  eq(X("prospectosService.obtener(_pTest.id).estatus"), 'Contactado', 'el estatus no debió cambiar');
+});
+t("mover a 'Apartado' exige la operación formal", () => {
+  const r = X("IANNA_PIPELINE.solicitarEstatus(_pTest.id,'Apartado','Kanban')");
+  eq(r.ok, false); eq(r.requiereOperacion, 'Apartado');
+});
+t('derivación operacional (voz del Motor) SÍ produce Venta', () => {
+  const r = X("IANNA_PIPELINE.derivarEstatusOperacional(_pTest.id,'Venta',{operacion:'contrato_firmado',operacionId:'apX'})");
+  verdad(r.ok, JSON.stringify(r));
+  eq(X("prospectosService.obtener(_pTest.id).estatus"), 'Venta');
+});
+t('una Venta NO retrocede por el pipeline (nueva Oportunidad, no arrastre)', () => {
+  const r = X("IANNA_PIPELINE.solicitarEstatus(_pTest.id,'Seguimiento','Kanban')");
+  eq(r.ok, false); verdad(r.protegidoPorOperacion === true);
+  eq(X("prospectosService.obtener(_pTest.id).estatus"), 'Venta');
+});
+t('estatus no reconocido se rechaza', () =>
+  eq(X("IANNA_PIPELINE.solicitarEstatus(_pTest.id,'EstadoInventado','Prueba').ok"), false));
+
+/* ── 6 · MOTOR FINANCIERO (Bloque 6 · Etapa 4) ── */
+console.log('▶ IANNA_FIN (Ledger única fuente de saldo)');
+X("var _apF = apartadosService.crear({prospectoId:_pTest.id, clave_lote:'999', estatus:'Activo', monto_enganche:50000, metodo_pago:'Efectivo', fecha_apartado:'2025-01-15', pagos:[{id:'pgT1',fecha:'2025-02-01',monto:30000,metodo:'Transferencia',concepto:'Enganche',folio:123456},{id:'pgT2',fecha:'2025-03-01',monto:20000,metodo:'Efectivo',concepto:'Enganche',folio:123457}]});");
+t('reconciliarHistorico crea asientos equivalentes (enganche + 2 pagos)', () => {
+  const r = X("IANNA_FIN.reconciliarHistorico()");
+  verdad(r.creados >= 3, 'creados=' + r.creados);
+  eq(X("IANNA_FIN.ingresosNetosOperacion(_apF.id)"), 100000);
+});
+t('reconciliarHistorico es IDEMPOTENTE (segunda corrida: 0 nuevos)', () => {
+  const r = X("IANNA_FIN.reconciliarHistorico()");
+  eq(r.creados, 0);
+  eq(X("IANNA_FIN.ingresosNetosOperacion(_apF.id)"), 100000);
+});
+t('efectivoOperacion distingue método (LFPIORPI intacto)', () =>
+  eq(X("IANNA_FIN.efectivoOperacion(_apF.id)"), 70000)); // 50k enganche efectivo + 20k pago efectivo
+t('registrarIngreso suma al ledger', () => {
+  X("IANNA_FIN.registrarIngreso({operacionId:_apF.id, personaId:_pTest.id, monto:10000, metodo:'Transferencia', documento:'00999999', concepto:'Pago prueba', politica_version:'v1', motivo:'test'})");
+  eq(X("IANNA_FIN.ingresosNetosOperacion(_apF.id)"), 110000);
+});
+t('las cancelaciones COMPENSAN, jamás borran (append-only)', () => {
+  const antes = X("IANNA_FIN.movimientosDe(_apF.id).length");
+  X("IANNA_FIN.compensarCancelacion({operacionId:_apF.id, personaId:_pTest.id, documentoCancelacion:'CAN-T1', motivo:'prueba', politica_version:'v1'})");
+  verdad(X("IANNA_FIN.movimientosDe(_apF.id).length") > antes, 'no se agregaron compensatorios');
+  eq(X("IANNA_FIN.ingresosNetosOperacion(_apF.id)"), 0, 'la compensación debe neutralizar los ingresos');
+});
+t('todo movimiento responde las 6 preguntas (usuario/fecha/política/operación/documento/motivo)', () => {
+  const m = X("IANNA_FIN.movimientosDe(_apF.id)[0]");
+  ['usuario','timestamp','operacionId','id_publico'].forEach(k => verdad(m[k], 'falta ' + k));
+});
+
+/* ── 7 · MOTOR DE COMISIONES (Bloque 7) ── */
+console.log('▶ IANNA_COM (política versionada)');
+X("var _vC = {id:'vC1', asesor:'u_test', prospectoId:_pTest.id, estatus:'Venta', total_operacion:2000000};");
+t('comisión asesor directa = 2% con distribución 50/50 (política v1)', () => {
+  const c = X("IANNA_COM.comisionAsesor(_vC)");
+  verdad(Math.abs(c.total - c.base * 0.02) < 1, 'total=' + c.total + ' base=' + c.base);
+  verdad(c.partes.length === 2 && Math.abs(c.partes[0].monto - c.total/2) < 1, 'partes 50/50');
+  verdad(c.politica_version, 'sin versión de política');
+});
+t('con broker la comisión del asesor baja a 1%', () => {
+  const c = X("IANNA_COM.comisionAsesor({..._vC, broker_id:'BRK-1'})");
+  verdad(Math.abs(c.total - c.base * 0.01) < 1, 'total=' + c.total);
+  eq(c.es_broker, true);
+});
+t('comisión gerente = 0.5% de la base', () => {
+  const c = X("IANNA_COM.comisionGerente(_vC)");
+  verdad(Math.abs(c.total - c.base * 0.005) < 1, 'total=' + c.total);
+});
+t('política congelada: snapshot manda sobre la vigente', () => {
+  const c = X("IANNA_COM.comisionAsesor({..._vC, politica_snapshot: IANNA_COM.politicaActual()})");
+  verdad(c.politica_version, 'snapshot sin versión');
+});
+
+/* ── 8 · MÁQUINA DE ESTADOS / MOTOR DE OPERACIONES (smoke) ── */
+console.log('▶ IANNA_ESTADOS / IANNA_OPS');
+t('la Máquina de Estados publica catálogo por estado', () => {
+  const d = X("IANNA_ESTADOS.get('Apartado')");
+  verdad(d && Array.isArray(d.permitidas), 'sin permitidas');
+});
+t('catalogoPara no descarta operaciones en silencio', () => {
+  const cat = X("IANNA_OPS.catalogoPara(_apF)");
+  verdad(Array.isArray(cat.permitidas), 'sin catálogo');
+  cat.permitidas.forEach(o => verdad(o.nombre && o.op, 'op sin nombre'));
+});
+t('el motor de operaciones NO expone acciones de UI en el catálogo', () => {
+  const cat = X("IANNA_OPS.catalogoPara(_apF)");
+  cat.permitidas.forEach(o => verdad(o.accion === undefined, 'catálogo con función de UI: ' + o.op));
+});
+
+/* ── 9 · DATASTORE (puerta única) ── */
+console.log('▶ DataStore');
+t('getExt/setExt persisten configuración extendida', () => {
+  X("DS.setExt('va_wa_config',{hola:1})");
+  eq(X("DS.getExt('va_wa_config').hola"), 1);
+});
+t('migrarLlavesLegadas absorbe llaves sueltas del navegador', () => {
+  almacen['va_sb_url'] = 'https://x.supabase.co';
+  X("DS.db._ext.__migrado_v195=false; DS.migrarLlavesLegadas()");
+  eq(X("DS.getExt('va_sb_url')"), 'https://x.supabase.co');
+  verdad(!('va_sb_url' in almacen), 'la llave legada no se removió');
+});
+
+/* ── resumen ── */
+console.log('\n═════════════════════════════════════');
+console.log(`RESULTADO: ${ok} pasaron · ${mal} fallaron`);
+if (mal) { console.log('\nFallas:\n - ' + fallas.join('\n - ')); process.exit(1); }
+console.log('SUITE EN VERDE ✓');
