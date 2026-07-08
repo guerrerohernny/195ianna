@@ -152,6 +152,21 @@ window.IANNA_FIN = (function(){
     });
   }
 
+  // Ajusta un ingreso documentado sin mutar el ledger. Si el importe ya emitido cambió,
+  // compensa los ingresos previos de ese documento y registra el nuevo monto.
+  function ajustarIngresoDocumentado({operacionId, personaId, monto, metodo, documento, concepto, politica_version, motivo}){
+    const objetivo=Math.max(0,Number(monto)||0);
+    const relacionados=movimientosDe(operacionId).filter(m=>m.documento===documento && (m.concepto||'').toLowerCase().includes(String(concepto||'').toLowerCase()));
+    const ingresos=relacionados.filter(m=>m.tipo==='ingreso');
+    const compensados=new Set(relacionados.filter(m=>m.tipo==='cancelacion'&&m.movimiento_compensa).map(m=>m.movimiento_compensa));
+    const activos=ingresos.filter(m=>!compensados.has(m.id_publico));
+    const actual=activos.reduce((s,m)=>s+m.monto,0);
+    if(Math.abs(actual-objetivo)<0.0001) return {sin_cambio:true,actual,movimiento:activos[activos.length-1]||null,compensaciones:[]};
+    const compensaciones=activos.map(ing=>registrarMovimiento({tipo:'cancelacion',operacionId,personaId:personaId||ing.personaId,monto:ing.monto,metodo:ing.metodo,documento,concepto:`Ajuste de ${concepto}: compensación de ${ing.id_publico}`,movimiento_compensa:ing.id_publico,politica_version,motivo:motivo||'Corrección auditada de ingreso documentado'}));
+    const movimiento=objetivo>0?registrarIngreso({operacionId,personaId,monto:objetivo,metodo,documento,concepto,politica_version,motivo:motivo||'Ingreso documentado ajustado'}):null;
+    return {sin_cambio:false,actual:objetivo,movimiento,compensaciones};
+  }
+
   // Cancelar una operación entera: emite movimientos compensatorios por CADA ingreso previo.
   // Devuelve el arreglo de movimientos compensatorios creados. NINGÚN ingreso previo se toca.
   function compensarCancelacion({operacionId, personaId, documentoCancelacion, motivo, politica_version}){
@@ -284,7 +299,7 @@ window.IANNA_FIN = (function(){
     // Precio real
     precioVenta, baseBruta, descuentoAplicado,
     // Operaciones financieras
-    registrarIngreso, compensarCancelacion, compensarComisiones, registrarReembolso, registrarPenalizacion,
+    registrarIngreso, ajustarIngresoDocumentado, compensarCancelacion, compensarComisiones, registrarReembolso, registrarPenalizacion,
     // Reportes
     estadoDeCuenta,
     // Fase 1.95

@@ -43,7 +43,7 @@ function abrirOperaciones(aid){
   const l=getLote(ap.clave_lote);
   const cat=IANNA_OPS.catalogoPara(ap);
   window._opsApId=aid;
-  $('ops-titulo').textContent=`${p?.nombre||'Cliente'} — Lote ${ap.clave_lote}${l?.clave_fisica?' ('+l.clave_fisica+')':''}`;
+  $('ops-titulo').textContent=`${p?.nombre||'Cliente'} — ${l?.clave_fisica||IANNA_FMT.UBICACION(l?.mz,l?.lote)}`;
   $('ops-body').innerHTML=`
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:11.5px">
       <span class="badge" style="background:#1E3D0F;color:#fff">Estado: ${cat.estado}</span>
@@ -53,7 +53,7 @@ function abrirOperaciones(aid){
       ${p?.id_cliente?`<span class="badge" style="background:#f1f5f9;color:#334155">${p.id_cliente}</span>`:(p?.id_publico?`<span class="badge" style="background:#f1f5f9;color:#334155">${p.id_publico}</span>`:'')}
     </div>
     <div style="font-weight:700;font-size:12.5px;margin-bottom:8px">Operaciones permitidas en este estado</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;margin-bottom:14px">
+    <div class="ops-grid" style="margin-bottom:14px">
       ${cat.permitidas.map((o,i)=>`<button class="btn ${o.futura?'btn-out':'btn-navy'}" style="justify-content:flex-start;font-size:12.5px;white-space:normal;text-align:left" onclick="ejecutarOpDesdeModal(${i})">${o.nombre}${o.futura?' <span style="opacity:.55;font-size:10px;margin-left:4px">(próxima fase)</span>':''}</button>`).join('')||'<div style="color:var(--t3);font-size:12px">Ninguna — estado terminal.</div>'}
     </div>
     ${cat.prohibidas.length?`<div style="font-weight:700;font-size:12.5px;margin-bottom:6px;color:var(--t3)">No disponibles en "${cat.estado}"</div>
@@ -79,7 +79,7 @@ function openCancelarVenta(aid){
   if(!AUTORIZADOR.autorizar('cancelar_operacion',{registroId:aid}).ok) return;
   const ap=apartadosService.obtener(aid); if(!ap||ap.estatus!=='Venta') return;
   const p=prospectosService.obtener(ap.prospectoId);
-  const motivo=prompt(`Cancelar venta de ${p?p.nombre:'cliente'} — Lote ${ap.clave_lote}\n\nEscribe el motivo de cancelación:`,'');
+  const motivo=prompt(`Cancelar venta de ${p?p.nombre:'cliente'} — ${ubicacionLote(ap.clave_lote)}\n\nEscribe el motivo de cancelación:`,'');
   if(motivo===null) return; // cancelado por el usuario
   if(!motivo.trim()){ toast('El motivo es requerido','err'); return; }
   const destino=confirm(`¿Volver el lote ${ap.clave_lote} a:\n\n✅ Aceptar → Disponible\n❌ Cancelar → Apartado`)?'Disponible':'Apartado';

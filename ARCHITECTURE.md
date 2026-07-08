@@ -171,3 +171,38 @@ de `dataStore.service.js` (antes cargaba después de `app.init.js`).
 
 **Migraciones de arranque** (idempotentes, en `app.init.js`):
 `IANNA_IDS.migrar()` → `DS.migrarLlavesLegadas()` → `IANNA_FIN.reconciliarHistorico()`.
+
+---
+
+# Apéndice — Fase 1.96: Business Rules & UX Hardening
+
+## Fuente única de valor comercial
+
+`business/operacion-financiera.business.js` expone `IANNA_VALOR`. Apartados, Cierre y Comisiones deben consumir el mismo desglose comercial. El Motor distingue Valor Total de la Vivienda de Gastos de Operación y Valor Total Financiero.
+
+## Snapshot financiero
+
+Al guardar/cerrar una operación se conserva el desglose comercial, gastos aplicados, financiamiento, crédito, componente público, pago adicional y política de comisión. El snapshot es deep-frozen en runtime y persistido como dato histórico de la operación.
+
+## Instituciones financieras
+
+Las instituciones son configuración, no branches dispersos de UI. El atributo `tipo` gobierna el formulario:
+- `tradicional`: porcentaje y monto;
+- `mixto`: total + componente público + complemento automático;
+- `contado`: crédito deshabilitado y cero.
+
+## Gastos por operación
+
+Los parámetros producen sugerencias. El cierre conserva un draft por operación que puede editar, eliminar o añadir conceptos manuales sin mutar los parámetros globales. Cambiar de tipo de financiamiento reconcilia los defaults aplicables y preserva gastos manuales.
+
+## Ledger y pago adicional
+
+El pago adicional usa folio idempotente y ledger append-only. Las correcciones se expresan mediante compensación del ingreso documentado anterior y creación del nuevo ingreso, nunca mediante update del movimiento.
+
+## Nomenclatura
+
+- Cliente: `CLI-nnnnnn`
+- Lote: `LOT-nnnnnn`
+- Ubicación: `M0000-L0000`
+
+Las claves operativas antiguas siguen existiendo únicamente como referencias internas transitorias del runtime 1.x; no deben presentarse al usuario. Su sustitución por relaciones de entidad con `empresa_id`/`proyecto_id` pertenece a Fase 2.

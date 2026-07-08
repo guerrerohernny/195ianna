@@ -21,8 +21,8 @@ window.IANNA_CONFIG = {
   // ── Plataforma ──
   app: {
     nombre: 'IANNA CRM',
-    version: '1.0.0-fase1',
-    fase: 'Fase 1 — Refactorización de arquitectura',
+    version: '1.96.0',
+    fase: 'Fase 1.96 — Business Rules & UX Hardening',
   },
 
   // ── Implementación actual (Fase 2: única fuente de verdad de marca) ──

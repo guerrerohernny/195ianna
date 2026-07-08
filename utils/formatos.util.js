@@ -182,7 +182,12 @@ window.IANNA_FMT = (function(){
     return f.toLocaleDateString('es-MX',{day:'2-digit', month:'2-digit', year:'numeric'});
   }
 
-  return { MXN, M2, TEL, PCT, FOLIO, NUM_A_LETRAS, FECHA_LARGA, FECHA_CORTA };
+  function UBICACION(manzana,lote){
+    const f=v=>String(parseInt(String(v??'').replace(/\D/g,''))||0).padStart(4,'0');
+    return 'M'+f(manzana)+'-L'+f(lote);
+  }
+
+  return { MXN, M2, TEL, PCT, FOLIO, UBICACION, NUM_A_LETRAS, FECHA_LARGA, FECHA_CORTA };
 })();
 
 // ── ALIAS DE COMPATIBILIDAD ─────────────────────────────────────

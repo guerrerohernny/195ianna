@@ -31,25 +31,30 @@ function renderGastosTable(){
     <td><input type="text" value="${g.nombre}" onchange="updateGasto(${i},'nombre',this.value)" style="width:160px;border:1px solid var(--bd2);border-radius:5px;padding:3px 6px;font-size:12px"></td>
     <td><select onchange="updateGasto(${i},'tipo',this.value)" style="border:1px solid var(--bd2);border-radius:5px;padding:3px 6px;font-size:12px">${TIPOS.map(t=>`<option value="${t}" ${g.tipo===t?'selected':''}>${t}</option>`).join('')}</select></td>
     <td><input type="number" value="${g.valor}" step="0.0001" onchange="updateGasto(${i},'valor',parseFloat(this.value))" style="width:90px;border:1px solid var(--bd2);border-radius:5px;padding:3px 6px;font-size:12px"></td>
+    <td><input type="checkbox" ${g.aplica_credito!==false?'checked':''} onchange="updateGasto(${i},'aplica_credito',this.checked)"></td>
+    <td><input type="checkbox" ${g.aplica_contado===true?'checked':''} onchange="updateGasto(${i},'aplica_contado',this.checked)"></td>
     <td><input type="checkbox" ${g.activo?'checked':''} onchange="updateGasto(${i},'activo',this.checked)"></td>
     <td><button class="btn btn-red btn-xs" onclick="deleteGasto(${i})">✕</button></td>
   </tr>`).join('');
 }
 function updateGasto(i,field,val){ const P=getP(); const g=P.gastos_operacion||MASTER_PARAMS.gastos_operacion; g[i][field]=val; parametrosService.guardar({gastos_operacion:g}); }
 function deleteGasto(i){ const P=getP(); const g=[...(P.gastos_operacion||[])]; g.splice(i,1); parametrosService.guardar({gastos_operacion:g}); renderGastosTable(); }
-function addGastoRow(){ const P=getP(); const g=[...(P.gastos_operacion||[])]; g.push({id:'gasto_'+Date.now(),nombre:'Nuevo concepto',tipo:'fijo',valor:0,activo:true}); parametrosService.guardar({gastos_operacion:g}); renderGastosTable(); }
+function addGastoRow(){ const P=getP(); const g=[...(P.gastos_operacion||[])]; g.push({id:'gasto_'+Date.now(),nombre:'Nuevo concepto',tipo:'fijo',valor:0,aplica_credito:true,aplica_contado:false,activo:true}); parametrosService.guardar({gastos_operacion:g}); renderGastosTable(); }
 function renderInstTable(){
   const P=getP();
   const inst=P.instituciones||MASTER_PARAMS.instituciones;
   $('inst-tbody').innerHTML=inst.map((it,i)=>`<tr>
     <td><input type="text" value="${it.nombre}" onchange="updateInst(${i},'nombre',this.value)" style="width:140px;border:1px solid var(--bd2);border-radius:5px;padding:3px 6px;font-size:12px"></td>
-    <td><input type="checkbox" ${it.activo?'checked':''} onchange="updateInst(${i},'activo',this.checked)"></td>
+    <td><select onchange="updateInst(${i},'tipo',this.value);renderInstTable()" style="min-width:120px"><option value="tradicional" ${it.tipo==='tradicional'?'selected':''}>Tradicional</option><option value="mixto" ${it.tipo==='mixto'?'selected':''}>Mixto</option><option value="contado" ${it.tipo==='contado'?'selected':''}>Contado</option></select></td>
+    <td><input type="text" value="${it.componente_publico||''}" ${it.tipo==='mixto'?'':'disabled'} placeholder="INFONAVIT / FOVISSSTE" onchange="updateInst(${i},'componente_publico',this.value.trim())" style="width:145px;border:1px solid var(--bd2);border-radius:5px;padding:3px 6px;font-size:12px"></td>
+    <td><input type="number" min="1" value="${it.orden||i+1}" onchange="updateInst(${i},'orden',parseInt(this.value)||${i+1})" style="width:58px"></td>
+    <td><input type="checkbox" ${it.activo!==false?'checked':''} onchange="updateInst(${i},'activo',this.checked)"></td>
     <td><button class="btn btn-red btn-xs" onclick="deleteInst(${i})">✕</button></td>
   </tr>`).join('');
 }
 function updateInst(i,field,val){ const P=getP(); const inst=P.instituciones||MASTER_PARAMS.instituciones; inst[i][field]=val; parametrosService.guardar({instituciones:inst}); }
 function deleteInst(i){ const P=getP(); const inst=[...(P.instituciones||[])]; inst.splice(i,1); parametrosService.guardar({instituciones:inst}); renderInstTable(); }
-function addInstRow(){ const P=getP(); const inst=[...(P.instituciones||[])]; inst.push({id:'inst_'+Date.now(),nombre:'Nueva institución',activo:true}); parametrosService.guardar({instituciones:inst}); renderInstTable(); }
+function addInstRow(){ const P=getP(); const inst=[...(P.instituciones||[])]; inst.push({id:'inst_'+Date.now(),nombre:'Nueva institución',tipo:'tradicional',activo:true,orden:inst.length+1}); parametrosService.guardar({instituciones:inst}); renderInstTable(); }
 function renderModelosTable(){
   const mods=DS.getModelos();
   $('modelos-tbody').innerHTML=mods.map((m,i)=>`<tr>
@@ -92,58 +97,51 @@ function saveParametros(){
 
 
 // ══ FASE 1.9: Política Comercial editable desde Parámetros ══════
+let _distDraft={asesor:[],gerente:[]};
 function renderPoliticaComercial(){
   const pol = IANNA_COM.politicaActual();
   $('pc-version').textContent = pol.version;
   $('pc-bc-viv').checked = !!pol.base_comisionable.precio_vivienda;
   $('pc-bc-exc').checked = !!pol.base_comisionable.excedente_terreno;
   $('pc-bc-plus').checked = !!pol.base_comisionable.plusvalia;
-  $('pc-bc-adic').checked = !!pol.base_comisionable.adicional;
+  $('pc-bc-adic').checked = !!(pol.base_comisionable.adicional||pol.base_comisionable.fraccion_fusionada||pol.base_comisionable.lote_adicional||pol.base_comisionable.construccion_adicional);
   $('pc-bc-gastos').checked = !!pol.base_comisionable.gastos_operacion;
   $('pc-desc').checked = !!pol.aplicar_descuento;
   $('pc-pct-ad').value = (pol.porcentajes.asesor_directo*100).toFixed(3);
   $('pc-pct-ab').value = (pol.porcentajes.asesor_broker*100).toFixed(3);
   $('pc-pct-ge').value = (pol.porcentajes.gerente*100).toFixed(3);
   $('pc-pct-bk').value = (pol.porcentajes.broker*100).toFixed(3);
-  const da = pol.distribucion_asesor||[];
-  const dg = pol.distribucion_gerente||[];
-  $('pc-dist-a1').value = ((da[0]?.pct||0)*100).toFixed(0);
-  $('pc-dist-a2').value = ((da[1]?.pct||0)*100).toFixed(0);
-  $('pc-dist-g1').value = ((dg[0]?.pct||0)*100).toFixed(0);
-  $('pc-dist-g2').value = ((dg[1]?.pct||0)*100).toFixed(0);
+  $('pc-contado-act').checked=!!pol.reglas_especiales?.contado?.activa;
+  $('pc-contado-pct').value=((pol.reglas_especiales?.contado?.porcentaje_asesor||0.025)*100).toFixed(3);
+  _distDraft.asesor=JSON.parse(JSON.stringify(pol.distribucion_asesor||[]));
+  _distDraft.gerente=JSON.parse(JSON.stringify(pol.distribucion_gerente||[]));
+  renderDistRows('asesor'); renderDistRows('gerente');
   $('pc-pen-apt').value = (((pol.penalizaciones?.cancelacion_apartado?.valor)||0)*100).toFixed(2);
   $('pc-pen-ven').value = (((pol.penalizaciones?.cancelacion_venta?.valor)||0)*100).toFixed(2);
 }
+function renderDistRows(tipo){
+  const el=$('pc-dist-'+tipo); if(!el)return;
+  el.innerHTML=(_distDraft[tipo]||[]).map((x,i)=>`<div style="display:grid;grid-template-columns:1.4fr .7fr 34px;gap:6px;margin:6px 0"><input value="${x.nombre||x.parte||''}" oninput="updateDist('${tipo}',${i},'nombre',this.value)"><input type="number" step="0.001" value="${((x.pct||0)*100).toFixed(3)}" oninput="updateDist('${tipo}',${i},'pct',this.value)"><button type="button" class="btn btn-red btn-xs" onclick="removeDist('${tipo}',${i})">×</button></div>`).join('');
+}
+function addDistRow(tipo){ _distDraft[tipo].push({parte:'parte_'+(_distDraft[tipo].length+1),nombre:'Nueva parte',evento:'manual',pct:0}); renderDistRows(tipo); }
+function removeDist(tipo,i){ _distDraft[tipo].splice(i,1); renderDistRows(tipo); }
+function updateDist(tipo,i,campo,val){ if(campo==='pct') _distDraft[tipo][i].pct=(parseFloat(val)||0)/100; else _distDraft[tipo][i][campo]=val; }
+function _validarDist(arr,nombre){ const sum=(arr||[]).reduce((s,x)=>s+Number(x.pct||0),0); if(Math.abs(sum-1)>0.0001){ toast(`La distribución de ${nombre} debe sumar 100%`,'err'); return false; } return true; }
 function guardarPoliticaComercial(){
-  const a1 = parseFloat($('pc-dist-a1').value)||0, a2 = parseFloat($('pc-dist-a2').value)||0;
-  const g1 = parseFloat($('pc-dist-g1').value)||0, g2 = parseFloat($('pc-dist-g2').value)||0;
-  if(Math.abs((a1+a2)-100) > 0.01){ toast('La distribución del asesor debe sumar 100%','err'); return; }
-  if(Math.abs((g1+g2)-100) > 0.01){ toast('La distribución del gerente debe sumar 100%','err'); return; }
+  if(!_validarDist(_distDraft.asesor,'asesor')||!_validarDist(_distDraft.gerente,'gerente')) return;
   const nueva = {
     base_comisionable: {
-      precio_vivienda:    $('pc-bc-viv').checked,
-      excedente_terreno:  $('pc-bc-exc').checked,
-      plusvalia:          $('pc-bc-plus').checked,
-      adicional:          $('pc-bc-adic').checked,
-      gastos_operacion:   $('pc-bc-gastos').checked,
+      precio_vivienda:$('pc-bc-viv').checked, excedente_terreno:$('pc-bc-exc').checked, plusvalia:$('pc-bc-plus').checked,
+      fraccion_fusionada:$('pc-bc-adic').checked, lote_adicional:$('pc-bc-adic').checked, construccion_adicional:$('pc-bc-adic').checked,
+      gastos_operacion:$('pc-bc-gastos').checked,
     },
-    aplicar_descuento: $('pc-desc').checked,
-    porcentajes: {
-      asesor_directo:  (parseFloat($('pc-pct-ad').value)||0)/100,
-      asesor_broker:   (parseFloat($('pc-pct-ab').value)||0)/100,
-      gerente:         (parseFloat($('pc-pct-ge').value)||0)/100,
-      broker:          (parseFloat($('pc-pct-bk').value)||0)/100,
-    },
-    distribucion_asesor:  [ { parte:'firma', pct:a1/100 }, { parte:'escrituracion', pct:a2/100 } ],
-    distribucion_gerente: [ { parte:'firma', pct:g1/100 }, { parte:'escrituracion', pct:g2/100 } ],
-    penalizaciones: {
-      cancelacion_apartado: { tipo:'porcentaje', valor:(parseFloat($('pc-pen-apt').value)||0)/100, exhibiciones:1, retencion_comisiones:false },
-      cancelacion_venta:    { tipo:'porcentaje', valor:(parseFloat($('pc-pen-ven').value)||0)/100, exhibiciones:1, retencion_comisiones:false, distribucion:[] },
-    },
+    aplicar_descuento:$('pc-desc').checked,
+    porcentajes:{ asesor_directo:(parseFloat($('pc-pct-ad').value)||0)/100, asesor_broker:(parseFloat($('pc-pct-ab').value)||0)/100, gerente:(parseFloat($('pc-pct-ge').value)||0)/100, broker:(parseFloat($('pc-pct-bk').value)||0)/100 },
+    distribucion_asesor:JSON.parse(JSON.stringify(_distDraft.asesor)), distribucion_gerente:JSON.parse(JSON.stringify(_distDraft.gerente)),
+    reglas_especiales:{contado:{activa:$('pc-contado-act').checked,porcentaje_asesor:(parseFloat($('pc-contado-pct').value)||0)/100}},
+    penalizaciones:{ cancelacion_apartado:{tipo:'porcentaje',valor:(parseFloat($('pc-pen-apt').value)||0)/100,exhibiciones:1,retencion_comisiones:false}, cancelacion_venta:{tipo:'porcentaje',valor:(parseFloat($('pc-pen-ven').value)||0)/100,exhibiciones:1,retencion_comisiones:false,distribucion:[]} }
   };
-  const guardada = IANNA_COM.guardarPolitica(nueva, 'Cambio manual desde Parámetros');
-  renderPoliticaComercial();
-  toast('Política Comercial guardada como '+guardada.version+' ✓','ok');
+  const guardada=IANNA_COM.guardarPolitica(nueva,'Cambio manual desde Parámetros'); renderPoliticaComercial(); toast('Política Comercial guardada como '+guardada.version+' ✓','ok');
 }
 
 /* ── FASE 1.95 · BLOQUE 10: navegación por categorías ─────────────── */
@@ -159,7 +157,7 @@ function _renderParamSistema(){
   let pol='v1'; try{ pol=IANNA_COM.politicaActual().version; }catch(e){}
   let movs=0; try{ movs=IANNA_FIN.ledgerCompleto().length; }catch(e){}
   el.innerHTML=[
-    ['Versión de esquema de datos','1.95 (Kernel Stabilization)'],
+    ['Versión de esquema de datos','1.96 (Business Rules & UX Hardening)'],
     ['Política comercial vigente',pol],
     ['Política de autorización',(typeof AUTORIZADOR!=='undefined')?AUTORIZADOR.politicaAplicada():'—'],
     ['Movimientos en el Ledger',movs+' (inmutable, append-only)'],

@@ -22,7 +22,7 @@ const DS = {
         {id:'u4',nombre:'María García Torres',correo:'maria@va.com',pass:'1234',rol:'asesor',telefono:'667 555 6666',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
       ],
       prospectos:[],seguimientos:[],recordatorios:[],
-      inventario:JSON.parse(JSON.stringify(MASTER_INV)).map(l=>({...l,historial:[]})),
+      inventario:[],
       apartados:[],
       params:{...MASTER_PARAMS},
       modelos:JSON.parse(JSON.stringify(MASTER_MOD)),
@@ -31,23 +31,13 @@ const DS = {
       cotizaciones:[],
       conversaciones:[],
     };
-    // Demo prospectos — solo activos
-    const NS=['Luis Herrera Díaz','Sofía Torres Ruiz','Pedro Ramírez Luna','Carmen Vega Mora','Jorge Castillo Gil','Valeria Ruiz Peña','Andrés Flores Cruz','Daniela Morales Ríos','Fernando Aguilar Soto','Claudia Jiménez Paz'];
-    const ES=['Nuevo','Contactado','Cita agendada','Visitó desarrollo','Seguimiento','Contactado','Nuevo','Cita agendada','Visitó desarrollo','Seguimiento'];
-    const AS=['u2','u3','u4'];
-    const FS=['Facebook','Instagram','TikTok','Google','Referido','Cartel','Agencia','Broker','Guardia','Expo'];
-    NS.forEach((n,i)=>{
-      const id='p'+(i+1);
-      const d=new Date(); d.setDate(d.getDate()-Math.floor(Math.random()*22));
-      db.prospectos.push({id,nombre:n,telefono:fmtTelVal('667'+Math.floor(1000000+Math.random()*9000000)),correo:n.split(' ')[0].toLowerCase()+(Math.floor(10+Math.random()*90))+'@gmail.com',fuente:FS[i],fechaRegistro:d.toISOString(),presupuesto:1500000+Math.floor(Math.random()*2500000),enganche:200000+Math.floor(Math.random()*500000),ingresos:25000+Math.floor(Math.random()*70000),estadoCivil:['Soltero','Casado','Divorciado'][i%3],comentarios:'Interesado en casa de 3 recámaras. Tiene crédito INFONAVIT. Busca zona tranquila.',asesor:AS[i%AS.length],estatus:ES[i]});
-      if(i<8) db.seguimientos.push({id:'s'+id,prospectoId:id,tipo:'Llamada',nota:'Contacto inicial realizado. Prospecto muestra interés en modelos disponibles.',fecha:new Date(d.getTime()+86400000).toISOString(),usuario:AS[i%AS.length],estatusCambio:ES[i]});
-    });
+    // Fase 1.96: bootstrap limpio. Inventario y datos transaccionales inician en cero.
     localStorage.setItem(DS_KEY,JSON.stringify(db));
     return db;
   },
   find(col,filter={}) { let d=[...(this.db[col]||[])]; Object.entries(filter).forEach(([k,v])=>{ if(v!==undefined&&v!=='') d=d.filter(r=>r[k]===v); }); return d; },
   findOne(col,id) { return (this.db[col]||[]).find(r=>r.id===id); },
-  create(col,data) { data.id=data.id||uid(); if(data.schema_version===undefined) data.schema_version='1.95'; if(!this.db[col]) this.db[col]=[]; this.db[col].unshift(data); this._save(this.db); return data; },
+  create(col,data) { data.id=data.id||uid(); if(data.schema_version===undefined) data.schema_version='1.96'; if(!this.db[col]) this.db[col]=[]; this.db[col].unshift(data); this._save(this.db); return data; },
   update(col,id,patch) { const i=(this.db[col]||[]).findIndex(r=>r.id===id); if(i<0) return null; this.db[col][i]={...this.db[col][i],...patch}; this._save(this.db); return this.db[col][i]; },
   delete(col,id) { if(!this.db[col]) return; this.db[col]=this.db[col].filter(r=>r.id!==id); this._save(this.db); },
   /* ── Fase 1.95: configuración extendida DENTRO de la puerta única ──
@@ -65,6 +55,28 @@ const DS = {
       });
       this.db._ext.__migrado_v195=true; this._save(this.db);
     }catch(e){ console.error('migrarLlavesLegadas',e); }
+  },
+  aplicarBootstrapLimpio196() {
+    if(this.db.bootstrap_limpio_196) return false;
+    const antes={
+      inventario:(this.db.inventario||[]).length, prospectos:(this.db.prospectos||[]).length,
+      apartados:(this.db.apartados||[]).length, seguimientos:(this.db.seguimientos||[]).length,
+      recordatorios:(this.db.recordatorios||[]).length, auditoria:(this.db.auditoria||[]).length,
+      cotizaciones:(this.db.cotizaciones||[]).length, conversaciones:(this.db.conversaciones||[]).length,
+      ledger:(this.db.ledger||[]).length, comisiones:(this.db.comisiones||[]).length,
+      cancelaciones:(this.db.cancelaciones||[]).length,
+    };
+    // Conserva configuración maestra, usuarios, roles, modelos, brokers e integraciones.
+    ['inventario','prospectos','seguimientos','recordatorios','apartados','auditoria','cotizaciones','conversaciones','ledger','movimientos_financieros','comisiones','cancelaciones','oportunidades','operaciones','documentos','recibos','pagares'].forEach(k=>{ this.db[k]=[]; });
+    // Reinicia únicamente secuencias transaccionales; conserva ASE/GER/BRK ya asignados a maestros.
+    if(!this.db.id_seq) this.db.id_seq={};
+    ['PRO','CLI','LOT','VEN','APT','PAG','REC','CON','CAN','COM','AUD','OPE'].forEach(k=>{ this.db.id_seq[k]=0; });
+    delete this.db.migracion_ids_v1;
+    delete this.db.migracion_196_identidad;
+    delete this.db.migracion_196_producto;
+    this.db.bootstrap_limpio_196={fecha:new Date().toISOString(),schema_version:'1.96',eliminados:antes};
+    this._save(this.db);
+    return true;
   },
   getParams() { return this.db.params||{...MASTER_PARAMS}; },
   saveParams(p) { this.db.params={...this.db.params,...p}; this._save(this.db); },

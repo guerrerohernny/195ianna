@@ -39,7 +39,10 @@ window.IANNA_COM = (function(){
         precio_vivienda:      true,   // ✔ Modelo/vivienda
         excedente_terreno:    true,   // ✔ Excedente de terreno sobre lote base
         plusvalia:            true,   // ✔ Plusvalía
-        adicional:            true,   // ✔ Construcción/lote adicional
+        fraccion_fusionada:    true,
+        lote_adicional:       true,
+        construccion_adicional:true,
+        adicional:            true,   // compatibilidad histórica
         gastos_operacion:     false,  // ✘ Gastos administrativos, avalúo, notaría, escrituración — NO comisionan
       },
       aplicar_descuento: true,        // El descuento SIEMPRE reduce la base (nunca se comisiona sobre precio lista)
@@ -50,8 +53,9 @@ window.IANNA_COM = (function(){
         broker:          0.01,   // 1% al broker externo
       },
       // Distribución del cobro — configurable por empresa
-      distribucion_asesor:  [ { parte:'firma', pct:0.5 }, { parte:'escrituracion', pct:0.5 } ],
-      distribucion_gerente: [ { parte:'firma', pct:0.5 }, { parte:'escrituracion', pct:0.5 } ],
+      distribucion_asesor:  [ { parte:'firma', nombre:'Firma de contrato', evento:'contrato_firmado', pct:0.5 }, { parte:'escrituracion', nombre:'Escrituración', evento:'escrituracion', pct:0.5 } ],
+      distribucion_gerente: [ { parte:'firma', nombre:'Firma de contrato', evento:'contrato_firmado', pct:0.5 }, { parte:'escrituracion', nombre:'Escrituración', evento:'escrituracion', pct:0.5 } ],
+      reglas_especiales: { contado: { activa:false, porcentaje_asesor:0.025 } },
       // Penalizaciones (configurables — vacío por default)
       penalizaciones: {
         cancelacion_apartado: { tipo:'porcentaje', valor:0,    exhibiciones:1, retencion_comisiones:false },
@@ -132,21 +136,18 @@ window.IANNA_COM = (function(){
   // Descompone el total_operacion de una Operación en sus conceptos, para poder
   // filtrar cuáles entran en la base comisionable según la política.
   function conceptos(ap){
-    const l = getLote(ap.clave_lote) || {};
-    const m = getMod(ap.modelo_id) || {};
-    const P = getP();
-    const precio_vivienda   = Number(m.precio) || 0;
-    const excedente_terreno = (Number(l.excedente)||0) * (P.precio_m2_exc||9000);
-    const plusvalia         = Number(l.plusvalia) || 0;
-    const adicional         = l.fraccion_fusionada ? (Number(l.fraccion_m2_adicional)||0) * (Number(l.fraccion_precio_m2)||P.precio_m2_lote_adicional||13000) : 0;
-    // Gastos operativos: los del catálogo activo que aplican a esta venta
-    const bruto = precio_vivienda + excedente_terreno + plusvalia + adicional;
-    const gastos_operacion = (P.gastos_operacion||[]).filter(g=>g.activo).reduce((s,g) => {
-      if(g.tipo==='fijo') return s + g.valor;
-      if(g.tipo==='pct_vivienda') return s + bruto * g.valor;
-      return s;
-    }, 0);
-    return { precio_vivienda, excedente_terreno, plusvalia, adicional, gastos_operacion, bruto };
+    if(ap && ap.financial_snapshot && ap.financial_snapshot.base_comisionable_snapshot){
+      const x=ap.financial_snapshot.base_comisionable_snapshot;
+      return {...x, bruto:Number(x.bruto||x.total||0), gastos_operacion:Number(ap.financial_snapshot.total_gastos_operacion||0)};
+    }
+    const d=(typeof IANNA_VALOR!=='undefined') ? IANNA_VALOR.desglose(ap) : {};
+    const gastos=(ap?.financial_snapshot?.gastos_operacion||[]).reduce((s,g)=>s+Number(g.monto_aplicado||0),0);
+    return {
+      precio_vivienda:Number(d.vivienda||0), excedente_terreno:Number(d.excedente||0), plusvalia:Number(d.plusvalia||0),
+      fraccion_fusionada:Number(d.fraccion_fusionada||0), lote_adicional:Number(d.lote_adicional||0),
+      construccion_adicional:Number(d.construccion_adicional||0), adicional:Number(d.fraccion_fusionada||0)+Number(d.lote_adicional||0)+Number(d.construccion_adicional||0),
+      gastos_operacion:gastos, bruto:Number(d.total||0)
+    };
   }
 
   // Base comisionable según la política aplicada a esta operación.
@@ -159,7 +160,10 @@ window.IANNA_COM = (function(){
     if(bc.precio_vivienda)   base += c.precio_vivienda;
     if(bc.excedente_terreno) base += c.excedente_terreno;
     if(bc.plusvalia)         base += c.plusvalia;
-    if(bc.adicional)         base += c.adicional;
+    if(bc.fraccion_fusionada) base += c.fraccion_fusionada;
+    if(bc.lote_adicional) base += c.lote_adicional;
+    if(bc.construccion_adicional) base += c.construccion_adicional;
+    if(bc.adicional && bc.fraccion_fusionada===undefined && bc.lote_adicional===undefined && bc.construccion_adicional===undefined) base += c.adicional;
     if(bc.gastos_operacion)  base += c.gastos_operacion;
     if(politica.aplicar_descuento){
       const desc = IANNA_FIN.descuentoAplicado(ap);
@@ -177,10 +181,12 @@ window.IANNA_COM = (function(){
     const politica = ap.politica_snapshot || politicaActual();
     const { base, politica_version } = baseComisionable(ap);
     const esBroker = !!ap.broker_id;
-    const pct = esBroker ? politica.porcentajes.asesor_broker : politica.porcentajes.asesor_directo;
+    const tipoFin=String(ap?.financial_snapshot?.tipo_financiamiento||ap?.datos_cierre?.tipoCredito||'').toLowerCase();
+    const reglaContado=politica.reglas_especiales?.contado;
+    const pct = (!esBroker && tipoFin==='contado' && reglaContado?.activa) ? Number(reglaContado.porcentaje_asesor||0) : (esBroker ? politica.porcentajes.asesor_broker : politica.porcentajes.asesor_directo);
     const total = base * pct;
-    const partes = politica.distribucion_asesor.map(p => ({ parte:p.parte, pct:p.pct, monto: total*p.pct }));
-    return { rol:'asesor', beneficiario_id: ap.asesor, base, porcentaje:pct, total, partes, politica_version, es_broker:esBroker };
+    const partes = (politica.distribucion_asesor||[]).map(p => ({ parte:p.parte, nombre:p.nombre||p.parte, evento:p.evento||p.parte, pct:Number(p.pct||0), monto: total*Number(p.pct||0) }));
+    return { rol:'asesor', beneficiario_id: ap.asesor, base, porcentaje:pct, total, partes, politica_version, es_broker:esBroker, regla_especial_aplicada:(!esBroker&&tipoFin==='contado'&&reglaContado?.activa)?'contado':null };
   }
 
   // Comisión del gerente sobre esta operación.

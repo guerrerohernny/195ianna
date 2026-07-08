@@ -193,14 +193,23 @@ function eliminarProspecto(pid){
   const p=DS.findOne('prospectos',pid);
   // ── MOTOR: eliminaciones protegidas — la información histórica NO se borra ──
   const chk=IANNA_MOTOR.puedeEliminarProspecto(pid);
+  if(chk.bloqueado){
+    const op=chk.activas[0];
+    toast(`Este expediente tiene una Operación activa${op?.id_publico?' '+op.id_publico:''}. Resuelve primero la operación mediante el flujo correspondiente.`,'err',7000);
+    return;
+  }
   if(!chk.fisico){
     const r=chk.relaciones;
     const det=[r.apartados?`${r.apartados} apartado(s)/venta(s)`:null, r.seguimientos?`${r.seguimientos} seguimiento(s)`:null, r.cotizaciones?`${r.cotizaciones} cotización(es)`:null].filter(Boolean).join(', ');
-    if(!confirm(`"${p?.nombre}" tiene información relacionada (${det}).\n\nPor integridad, el expediente NO se elimina: se marcará como INACTIVO (se oculta de las vistas y conserva todo su historial).\n\n¿Marcar como Inactivo?`)) return;
-    prospectosService.actualizar(pid,{estatus:'Inactivo', inactivado_fecha:new Date().toISOString(), inactivado_usuario:CU.id});
-    IANNA_MOTOR.auditar('prospectos', pid, 'INACTIVAR_PROSPECTO', {estatus:p?.estatus}, {estatus:'Inactivo', relaciones:det}, 'Eliminación protegida: expediente con historial pasa a Inactivo');
+    if(!confirm(`"${p?.nombre}" tiene historial (${det}).
+
+No se eliminará: el expediente se ARCHIVARÁ y conservará su historial.
+
+¿Archivar expediente?`)) return;
+    prospectosService.actualizar(pid,{estatus:'Inactivo', archivado:true, archivado_fecha:new Date().toISOString(), archivado_usuario:CU.id});
+    IANNA_MOTOR.auditar('prospectos', pid, 'ARCHIVAR_EXPEDIENTE', {estatus:p?.estatus}, {estatus:'Inactivo', relaciones:det}, 'Expediente con historial, sin operación activa');
     closeM('m-det'); filterProsp(); renderDashboard();
-    toast(`"${p?.nombre}" marcado como Inactivo — historial conservado ✓`,'warn');
+    toast(`Expediente de "${p?.nombre}" archivado ✓`,'warn');
     return;
   }
   if(!confirm(`¿Eliminar a "${p?.nombre}" permanentemente? (No tiene historial relacionado.)`)) return;

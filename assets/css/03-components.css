@@ -130,3 +130,16 @@ tbody tr:last-child td{border-bottom:none}
 .rbw{width:80px;height:5px;background:var(--s2);border-radius:3px;overflow:hidden}
 .rb{height:100%;border-radius:3px;background:var(--gold)}
 
+
+/* Fase 1.96 · filas resumen financieras y modal de Operaciones */
+.summary-row td{font-weight:700}
+.summary-row-dark td{background:#0D1F3C!important;color:#fff!important}
+.summary-row-gold td{background:#C9963C!important;color:#fff!important}
+.summary-row-dark:hover td{background:#0D1F3C!important;color:#fff!important}
+.summary-row-gold:hover td{background:#C9963C!important;color:#fff!important}
+#m-operaciones .modal{display:flex;flex-direction:column;max-height:88vh;overflow:hidden}
+#m-operaciones .mbody{overflow:auto;min-height:0}
+#m-operaciones .mhdr,#m-operaciones .mfoot{flex:0 0 auto}
+#m-operaciones .ops-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#m-operaciones .ops-grid>*{min-width:0;overflow-wrap:anywhere}
+@media(max-width:680px){#m-operaciones .ops-grid{grid-template-columns:1fr}}

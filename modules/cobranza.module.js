@@ -129,7 +129,7 @@ function imprimirReciboPago(){
   const hoy = new Date(pago.fecha+'T12:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
   const monto = pago.monto;
   const montoPalabras = numToLetras(monto);
-  const CONC=['APARTADO','ENGANCHE','MENSUALIDAD','INTERÉS MORATORIO'];
+  const CONC=['APARTADO','ENGANCHE','PAGO ADICIONAL','MENSUALIDAD','INTERÉS MORATORIO'];
   const sel=(pago.concepto||'').toUpperCase()==='INTERÉS MORATORIO'?'INTERÉS MORATORIO':(pago.concepto||'').toUpperCase();
   const esInteres=sel==='INTERÉS MORATORIO';
   const win = window.open('','_blank');
@@ -181,6 +181,21 @@ function imprimirReciboPago(){
   </body></html>`);
   win.document.close();
 }
+
+function imprimirReciboPagoAdicional(){
+  if(!_cierreData) return;
+  const fs=_cierreData.financialSnapshot||_cierreData.ap?.financial_snapshot||{};
+  const monto=Number(fs.pago_adicional||_cierreData.pagoAdic||0);
+  if(monto<=0){toast('Esta operación no tiene pago adicional','warn');return;}
+  const prev=_cierreData.pagoActual;
+  _cierreData.pagoActual={
+    id:'pago_adicional', fecha:(fs.creado_en||new Date().toISOString()).slice(0,10), monto,
+    metodo:fs.forma_pago_adicional||'Transferencia electrónica', concepto:'Pago adicional',
+    folio:_cierreData.ap?.recibo_pago_adicional||_cierreData.ap?.folio_pago_adicional||''
+  };
+  try{ imprimirReciboPago(); }finally{ _cierreData.pagoActual=prev; }
+}
+
 // ── Modo consulta para ventas cerradas ──
 function setCierreLock(locked){
   ['cierre-tab-0','cierre-tab-1'].forEach(tid=>{

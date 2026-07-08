@@ -108,19 +108,20 @@ function generarCierre(aid){
   }
 
   // Set title
-  $('cierre-ttl-sub').textContent = `${l.clave} — ${m.nombre} — ${p?p.nombre:'Cliente'}`;
+  $('cierre-ttl-sub').textContent = `${ubicacionLote(l)} — ${m.nombre} — ${p?p.nombre:'Cliente'}`;
 
   // Financial tab: show lot summary
   const P = getP();
   const pExc = P.precio_m2_exc||9000;
   const pFrac = P.precio_m2_lote_adicional||13000;
-  const vCasa = m.precio;
-  const vExc = l.excedente * pExc;
+  const dValor = IANNA_VALOR.desglose(ap);
+  const vCasa = dValor.vivienda;
+  const vExc = dValor.excedente;
   const fracM2 = l.fraccion_fusionada?(l.fraccion_m2_adicional||0):0;
   const pFracLote = l.fraccion_precio_m2||pFrac;
-  const vFrac = fracM2 * pFracLote;
-  const vPlus = l.plusvalia||0;
-  const vTotal = vCasa + vExc + vFrac + vPlus;
+  const vFrac = dValor.fraccion_fusionada;
+  const vPlus = dValor.plusvalia;
+  const vTotal = dValor.total;
   const gastosParam = P.gastos_operacion||MASTER_PARAMS.gastos_operacion;
   const gastos = gastosParam.filter(g=>g.activo).map(g=>{
     let monto=0;
@@ -133,7 +134,7 @@ function generarCierre(aid){
 
   $('cierre-resumen-lote').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px">
-      <div><div style="color:var(--t3);font-size:10px">LOTE</div><div style="font-weight:700">${l.clave}</div></div>
+      <div><div style="color:var(--t3);font-size:10px">LOTE</div><div style="font-weight:700">${l.clave_fisica||IANNA_FMT.UBICACION(l.mz,l.lote)}</div></div>
       <div><div style="color:var(--t3);font-size:10px">MODELO</div><div style="font-weight:700">${m.nombre}</div></div>
       <div><div style="color:var(--t3);font-size:10px">TERRENO</div><div style="font-weight:700">${f3(l.terreno)}m²</div></div>
       <div><div style="color:var(--t3);font-size:10px">EXCEDENTE</div><div style="font-weight:700">${f3(l.excedente)}m²</div></div>
@@ -157,6 +158,12 @@ function generarCierre(aid){
     $('c-plazo').value = '0';
   }
 
+  cargarInstitucionesCierre();
+  const _dcf=ap.datos_cierre||{};
+  if($('c-credito-pct')) $('c-credito-pct').value=Number(_dcf.fin_credito_pct||0).toFixed(3);
+  if($('c-publico-monto')) $('c-publico-monto').value=_dcf.fin_componente_publico_monto||'';
+  _cierreGastos=Array.isArray(_dcf.fin_gastos_operacion)&&_dcf.fin_gastos_operacion.length?JSON.parse(JSON.stringify(_dcf.fin_gastos_operacion)):IANNA_VALOR.gastosSugeridos(ap,parseMoneyInput($('c-credito').value),IANNA_VALOR.institucion($('c-institucion')?.value)?.tipo);
+  renderGastosCierre();
   calcCierre();
   window._cierreLocked=false;
   ['cierre-tab-0','cierre-tab-1'].forEach(tid=>{ const t=$(tid); if(t&&t.querySelectorAll) t.querySelectorAll('input,select,textarea').forEach(el=>el.disabled=false); });
@@ -177,16 +184,12 @@ function guardarDatosCierre(){
   toast('Datos del cliente guardados ✓','ok');
 }
 function getOrCreateNumCliente(prospectoId){
-  const year = new Date().getFullYear();
-  const p = DS.findOne('prospectos', prospectoId);
-  if(p && p.num_cliente) return p.num_cliente;
-  // Find next number for this year
-  const allProsp = DS.find('prospectos');
-  const yearsNums = allProsp.filter(x=>x.num_cliente&&x.num_cliente.endsWith('-'+year)).map(x=>parseInt(x.num_cliente.split('-')[0]));
-  const nextNum = yearsNums.length>0 ? Math.max(...yearsNums)+1 : 7; // start at 007
-  const numCliente = String(nextNum).padStart(3,'0')+'-'+year;
-  if(p) prospectosService.actualizar( prospectoId, {num_cliente: numCliente});
-  return numCliente;
+  const p=prospectosService.obtener(prospectoId);
+  if(!p) return '';
+  if(p.id_cliente) return p.id_cliente;
+  const cli=IANNA_IDS.asignar('cliente');
+  prospectosService.actualizar(prospectoId,{id_cliente:cli});
+  return cli;
 }
 
 function getNextFolio(){
@@ -211,38 +214,94 @@ function cierreTab(n){
   if(n===3) renderCobranza();
 }
 
+let _cierreGastos=[];
+let _syncCreditoLock=false;
+function cargarInstitucionesCierre(){
+  const sel=$('c-institucion'); if(!sel)return;
+  const actuales=IANNA_VALOR.instituciones();
+  sel.innerHTML=actuales.map(x=>`<option value="${x.id}">${x.nombre}</option>`).join('');
+  const dc=_cierreData?.ap?.datos_cierre||{}; sel.value=dc.fin_institucion_id||dc.tipoCredito||'contado'; if(!sel.value&&actuales[0])sel.value=actuales[0].id;
+  onInstitucionChange();
+}
+function onInstitucionChange(){
+  const inst=IANNA_VALOR.institucion($('c-institucion')?.value)||{tipo:'tradicional'};
+  const mixto=inst.tipo==='mixto';
+  if($('c-publico-wrap')) $('c-publico-wrap').style.display=mixto?'':'none';
+  if($('c-publico-label')) $('c-publico-label').textContent='Monto aportado por '+(inst.componente_publico||'componente público');
+  if(inst.tipo==='contado'){
+    $('c-credito').value=''; $('c-credito-pct').value='0.000';
+  }
+  if(_cierreData){
+    const sugeridos=IANNA_VALOR.gastosSugeridos(_cierreData.ap,parseMoneyInput($('c-credito').value),inst.tipo);
+    const prev=Array.isArray(_cierreGastos)?_cierreGastos:[];
+    const manuales=prev.filter(g=>g.origen==='manual');
+    _cierreGastos=sugeridos.map(sug=>{
+      const existente=prev.find(g=>g.id&&g.id===sug.id);
+      return (existente&&existente.modificado_manualmente)?{...sug,...existente}:sug;
+    }).concat(manuales);
+    renderGastosCierre();
+  }
+}
+function syncCreditoDesdePct(){
+  if(_syncCreditoLock||!_cierreData)return; _syncCreditoLock=true;
+  const base=IANNA_VALOR.valorTotalVivienda(_cierreData.ap); const pct=Math.max(0,Math.min(100,parseFloat($('c-credito-pct').value)||0));
+  $('c-credito').value=IANNA_FMT.MXN(base*pct/100).replace('$',''); _syncCreditoLock=false; calcCierre();
+}
+function syncCreditoDesdeMonto(){
+  if(_syncCreditoLock||!_cierreData)return; _syncCreditoLock=true;
+  const base=IANNA_VALOR.valorTotalVivienda(_cierreData.ap); const monto=parseMoneyInput($('c-credito').value);
+  $('c-credito-pct').value=base?((monto/base)*100).toFixed(3):'0.000'; _syncCreditoLock=false; calcCierre();
+}
+function renderGastosCierre(){
+  const el=$('cierre-gastos-editor'); if(!el)return;
+  el.innerHTML=_cierreGastos.map((g,i)=>`<div style="display:grid;grid-template-columns:1.5fr .8fr 34px;gap:6px;margin:5px 0"><input value="${g.nombre||''}" oninput="_cierreGastos[${i}].nombre=this.value"><input inputmode="numeric" value="${IANNA_FMT.MXN(g.monto_aplicado||0).replace('$','')}" oninput="formatMoneyInput(this);_cierreGastos[${i}].monto_aplicado=parseMoneyInput(this.value);_cierreGastos[${i}].modificado_manualmente=true;_cierreGastos[${i}].usuario_modificacion=CU?.id||'system';_cierreGastos[${i}].fecha_modificacion=new Date().toISOString();calcCierre()"><button type="button" class="btn btn-red btn-xs" onclick="removeGastoCierre(${i})">×</button></div>`).join('');
+}
+function addGastoCierre(){ _cierreGastos.push({id:null,nombre:'Nuevo gasto',origen:'manual',tipo:'manual',monto_calculado:0,monto_aplicado:0,modificado_manualmente:true,usuario_modificacion:CU?.id||'system',fecha_modificacion:new Date().toISOString()}); renderGastosCierre(); }
+function removeGastoCierre(i){ _cierreGastos.splice(i,1); renderGastosCierre(); calcCierre(); }
+
+function validarFinanciamientoCierre(){
+  if(!_cierreData) return {ok:false,error:'No hay cierre activo'};
+  const inst=IANNA_VALOR.institucion($('c-institucion')?.value)||null;
+  if(!inst) return {ok:false,error:'Selecciona una institución o modalidad de financiamiento'};
+  const base=IANNA_VALOR.valorTotalVivienda(_cierreData.ap);
+  const credito=parseMoneyInput($('c-credito')?.value||'0');
+  const publico=parseMoneyInput($('c-publico-monto')?.value||'0');
+  if(inst.tipo==='contado' && credito!==0) return {ok:false,error:'Una operación de Contado debe tener crédito $0'};
+  if(credito<0 || credito>base) return {ok:false,error:'El crédito debe estar entre $0 y el Valor Total de la Vivienda'};
+  if(inst.tipo==='mixto'){
+    if(publico<=0) return {ok:false,error:`Captura el monto aportado por ${inst.componente_publico||'el componente público'}`};
+    if(publico>credito) return {ok:false,error:'El monto del componente público no puede ser mayor al crédito total'};
+  }
+  return {ok:true};
+}
+
 function calcCierre(){
   if(!_cierreData) return;
   const {ap,l,m} = _cierreData;
   const P = getP();
   const pExc = P.precio_m2_exc||9000;
   const pFrac = P.precio_m2_lote_adicional||13000;
-  const vCasa = m.precio;
-  const vExc = l.excedente * pExc;
+  const dValor = IANNA_VALOR.desglose(ap);
+  const vCasa = dValor.vivienda;
+  const vExc = dValor.excedente;
   const fracM2 = l.fraccion_fusionada?(l.fraccion_m2_adicional||0):0;
-  const vFrac = fracM2*(l.fraccion_precio_m2||pFrac);
-  const vPlus = l.plusvalia||0;
-  // Extras capturados en el apartado original (construcción adicional y lote adicional)
-  const vConstrAdic = ap.construccion_adicional_val||0;
+  const vFrac = dValor.fraccion_fusionada;
+  const vPlus = dValor.plusvalia;
+  const vConstrAdic = dValor.construccion_adicional;
   const constrAdicDesc = ap.construccion_adicional_desc||'';
   const constrAdicM2 = ap.construccion_adicional_m2||0;
-  let vLoteAdic = 0, loteAdicData = null;
-  if(ap.clave_lote_adicional){
-    loteAdicData = getLote(ap.clave_lote_adicional);
-    if(loteAdicData) vLoteAdic = loteAdicData.terreno * pFrac;
-  }
-  const vTotalVivienda = vCasa + vExc + vFrac + vPlus + vConstrAdic + vLoteAdic;
+  let vLoteAdic = dValor.lote_adicional, loteAdicData = null;
+  if(ap.clave_lote_adicional) loteAdicData = getLote(ap.clave_lote_adicional);
+  const vTotalVivienda = dValor.total;
 
   const credito = parseMoneyInput($('c-credito').value);
-  const gastosParam = P.gastos_operacion||MASTER_PARAMS.gastos_operacion;
-  const gastosCalc = gastosParam.filter(g=>g.activo).map(g=>{
-    let monto=0;
-    if(g.tipo==='fijo') monto=g.valor;
-    else if(g.tipo==='pct_vivienda') monto=vTotalVivienda*g.valor;
-    else if(g.tipo==='pct_credito') monto=credito*g.valor;
-    return {...g,monto};
-  });
-  const vGastos = gastosCalc.reduce((s,g)=>s+g.monto,0);
+  const inst=IANNA_VALOR.institucion($('c-institucion')?.value)||{id:'contado',nombre:'Contado',tipo:'contado'};
+  if(!_cierreGastos.length) _cierreGastos=IANNA_VALOR.gastosSugeridos(ap,credito,inst.tipo);
+  // Recalcular únicamente gastos automáticos no modificados; los ajustes de esta operación se respetan.
+  const sugeridos=IANNA_VALOR.gastosSugeridos(ap,credito,inst.tipo);
+  _cierreGastos=_cierreGastos.map(g=>{ const sug=sugeridos.find(x=>x.id===g.id); return (sug&&!g.modificado_manualmente)?{...sug}:g; });
+  const gastosCalc=_cierreGastos.map(g=>({...g,monto:Number(g.monto_aplicado||0)}));
+  const vGastos = gastosCalc.reduce((s,g)=>s+Number(g.monto_aplicado||g.monto||0),0);
   const vTotalOp = vTotalVivienda + vGastos;
 
   const apartado = ap.monto_enganche||50000;
@@ -277,9 +336,28 @@ function calcCierre(){
   _cierreData.descuento = descuento;
   _cierreData.pagoAdic = pagoAdic;
   _cierreData.credito = credito;
+  _cierreData.creditoPct = parseFloat($('c-credito-pct')?.value)||0;
+  _cierreData.institucion = inst;
+  _cierreData.componentePublicoMonto = parseMoneyInput($('c-publico-monto')?.value||'0');
+  _cierreData.complementoBancario = Math.max(0, credito-_cierreData.componentePublicoMonto);
   _cierreData.vDesembolso = vDesembolso;
   _cierreData.pagares = pagares;
   _cierreData.plazo = plazo;
+  const apCalc={...ap,datos_cierre:{...(ap.datos_cierre||{}),fin_descuento:String(descuento),tipoCredito:inst.tipo}};
+  const comCalc=IANNA_COM.comisionAsesor(apCalc);
+  _cierreData.financialSnapshot=IANNA_VALOR.snapshot(ap,{
+    gastos:gastosCalc, apartado, descuento, pago_adicional:pagoAdic, forma_pago_adicional:$('c-forma-pago')?.value||'',
+    institucion_id:inst.id, institucion_nombre:inst.nombre, tipo_financiamiento:inst.tipo,
+    credito_pct:_cierreData.creditoPct, credito_monto:credito,
+    componente_publico_tipo:inst.componente_publico||'', componente_publico_monto:_cierreData.componentePublicoMonto,
+    complemento_bancario:_cierreData.complementoBancario, desembolso:vDesembolso,
+    base_comisionable:comCalc.base, base_snapshot:{...IANNA_VALOR.desglose(apCalc),descuento,bruto:vTotalVivienda,total:comCalc.base}, politica_version:comCalc.politica_version,
+    regla_especial_aplicada:comCalc.regla_especial_aplicada, porcentaje_comision:comCalc.porcentaje,
+    distribucion_comision:comCalc.partes
+  });
+
+  if($('c-complemento')) $('c-complemento').textContent = inst.tipo==='mixto' ? ('Complemento bancario: '+IANNA_FMT.MXN(_cierreData.complementoBancario)) : '';
+  renderGastosCierre();
 
   // Render financial table
   const rows = [
@@ -288,9 +366,9 @@ function calcCierre(){
     ...(fracM2>0?[['Fracción fusionada ('+f3(fracM2)+'m² × '+mxn(l.fraccion_precio_m2||pFrac)+'/m²)', mxn(vFrac)]]:[]),
     ...(vPlus>0?[['Plusvalía — '+l.tipo, mxn(vPlus)]]:[]),
     ...(vConstrAdic>0?[['Construcción adicional'+(constrAdicDesc?' — '+constrAdicDesc:'')+(constrAdicM2?' ('+f3(constrAdicM2)+'m²)':''), mxn(vConstrAdic)]]:[]),
-    ...(vLoteAdic>0?[['Lote adicional '+(loteAdicData?loteAdicData.clave:'')+' ('+(loteAdicData?f3(loteAdicData.terreno):'0')+'m² × '+mxn(pFrac)+'/m²)', mxn(vLoteAdic)]]:[]),
+    ...(vLoteAdic>0?[['Lote adicional '+(loteAdicData?ubicacionLote(loteAdicData):'')+' ('+(loteAdicData?f3(loteAdicData.terreno):'0')+'m² × '+mxn(pFrac)+'/m²)', mxn(vLoteAdic)]]:[]),
     ['VALOR TOTAL DE LA VIVIENDA', mxn(vTotalVivienda), true],
-    ...gastosCalc.map(g=>[g.nombre+(g.tipo.startsWith('pct')?` (${(g.valor*100).toFixed(2)}%)`:'')+' (Est.)', mxn(g.monto)]),
+    ...gastosCalc.map(g=>[g.nombre, mxn(g.monto_aplicado||g.monto)]),
     ['TOTAL GASTOS DE OPERACIÓN', mxn(vGastos), true],
     ['VALOR TOTAL DE LA OPERACIÓN', mxn(vTotalOp), true, 'navy'],
     ['Apartado', '− '+mxn(apartado)],
@@ -301,7 +379,7 @@ function calcCierre(){
   ];
 
   $('cierre-financiero').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
-    ${rows.map(r=>`<tr style="border-bottom:1px solid var(--s2)${r[2]?';background:'+(r[3]==='navy'?'#0D1F3C':r[3]==='gold'?'#C9963C':'var(--s2)'):''}">
+    ${rows.map(r=>`<tr class="${r[2]?(r[3]==='navy'?'summary-row summary-row-dark':r[3]==='gold'?'summary-row summary-row-gold':'summary-row'):''}" style="border-bottom:1px solid var(--s2)${r[2]&&!r[3]?';background:var(--s2)':''}">
       <td style="padding:7px 12px;${r[2]?'font-weight:700;color:'+(r[3]==='navy'||r[3]==='gold'?'#fff':'var(--t1)'):''}">${r[0]}</td>
       <td style="text-align:right;padding:7px 12px;font-weight:${r[2]?'700':'400'};${r[2]?'color:'+(r[3]==='navy'||r[3]==='gold'?'#fff':'var(--t1)'):''}">${r[1]}</td>
     </tr>`).join('')}
@@ -331,7 +409,7 @@ function updateCierrePreview(){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12.5px">
       <div><b>Cliente:</b> ${nombre}</div>
       <div><b>No. Cliente:</b> ${numCliente}</div>
-      <div><b>Lote:</b> ${l.clave} — Mz ${l.mz} Lote ${l.lote}</div>
+      <div><b>Lote:</b> ${l.clave_fisica||IANNA_FMT.UBICACION(l.mz,l.lote)}</div>
       <div><b>Modelo:</b> ${m.nombre}</div>
       <div><b>Valor vivienda:</b> ${mxn(vTotalVivienda)}</div>
       <div><b>Valor total operación:</b> ${mxn(vTotalOp)}</div>
@@ -375,7 +453,7 @@ function recolectarDatosCierreForm(){
     tipoCredito: $('c-tipo-credito').value,
     banco: $('c-banco').value,
     plazoCredito: $('c-plazo-credito').value,
-    num_cliente: _cierreData.numCliente,
+    id_cliente: _cierreData.numCliente,
     credito: _cierreData.credito,
     vTotalOp: _cierreData.vTotalOp,
     vDesembolso: _cierreData.vDesembolso,

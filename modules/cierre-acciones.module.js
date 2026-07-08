@@ -3,6 +3,16 @@
    Acciones del cierre: guardar, contrato firmado→venta, apertura de documentos, expediente en ficha.
    Fase 1 (refactor): código movido intacto desde el archivo original.
    ════════════════════════════════════════════════════════════════ */
+function registrarPagoAdicionalCierre(){
+  if(!_cierreData) return null;
+  const monto=Number(_cierreData.pagoAdic||0); if(monto<=0) return null;
+  const ap=_cierreData.ap; const ref='PAGO-ADICIONAL:'+ap.id;
+  const folio=IANNA_FOLIOS.emitirUnaVez('recibo_pago_adicional',ref);
+  const doc=IANNA_FMT.FOLIO(folio);
+  const r=IANNA_FIN.ajustarIngresoDocumentado({operacionId:ap.id,personaId:ap.prospectoId,monto,metodo:$('c-forma-pago')?.value||'Transferencia electrónica',documento:doc,concepto:'Pago adicional',politica_version:(ap.politica_snapshot||{}).version||IANNA_COM.politicaActual().version,motivo:'Pago adicional registrado/ajustado desde cierre'});
+  return {movimiento:r.movimiento,folio,ajuste:r};
+}
+
 // Contrato firmado: guarda el cierre completo, registra los documentos en el expediente y convierte a VENTA
 function registrarVentaCierre(){
   if(!_cierreData) return;
@@ -25,11 +35,14 @@ function guardarCierreCompleto(silencioso){
   if(!_cierreData) return false;
   const nombre=$('c-nombre').value.trim();
   if(!nombre){ toast('Captura el nombre del cliente en la pestaña 1','err'); cierreTab(0); return false; }
+  const vf=validarFinanciamientoCierre(); if(!vf.ok){ toast(vf.error,'err',6500); cierreTab(1); return false; }
   calcCierre();
   const snap=construirSnapshotCierre();
   const esVentaCorr=(DS.findOne('apartados',_cierreData.ap.id)?.estatus==='Venta');
   const antesCorr=esVentaCorr?(DS.findOne('apartados',_cierreData.ap.id).datos_cierre||{}):null;
-  apartadosService.actualizar(_cierreData.ap.id,{ datos_cierre:getClienteData(), doc_snapshot:snap, folio_recibo:IANNA_MOTOR.asegurarFolioCierre() });
+  const pagoAdic=registrarPagoAdicionalCierre();
+  apartadosService.actualizar(_cierreData.ap.id,{ datos_cierre:getClienteData(), doc_snapshot:snap, financial_snapshot:_cierreData.financialSnapshot||null, recibo_pago_adicional:pagoAdic?.folio||null, folio_recibo:IANNA_MOTOR.asegurarFolioCierre() });
+  if(pagoAdic?.folio) registrarDocumento(_cierreData.ap.id,'imprimirReciboPagoAdicional','Recibo de Pago Adicional');
   if(esVentaCorr) IANNA_MOTOR.auditar('apartados',_cierreData.ap.id,'CORRECCION_ADMINISTRATIVA',{datos_cierre:antesCorr},{datos_cierre:getClienteData()},'Guardado sobre venta cerrada (edición habilitada)');
   if(!silencioso) toast('Datos del cierre guardados ✓','ok');
   return true;
@@ -45,7 +58,9 @@ function abrirDocCierre(fn){
   if(fn==='imprimirPagares'&&!(_cierreData.pagares&&_cierreData.pagares.length)){ toast('Esta operación no tiene pagarés (contado)','warn'); return; }
   calcCierre();
   const snap=construirSnapshotCierre();
-  apartadosService.actualizar(_cierreData.ap.id,{ datos_cierre:getClienteData(), doc_snapshot:snap, folio_recibo:IANNA_MOTOR.asegurarFolioCierre(), cierre_generado:true });
+  const pagoAdic=registrarPagoAdicionalCierre();
+  apartadosService.actualizar(_cierreData.ap.id,{ datos_cierre:getClienteData(), doc_snapshot:snap, financial_snapshot:_cierreData.financialSnapshot||null, recibo_pago_adicional:pagoAdic?.folio||null, folio_recibo:IANNA_MOTOR.asegurarFolioCierre(), cierre_generado:true });
+  if(pagoAdic?.folio) registrarDocumento(_cierreData.ap.id,'imprimirReciboPagoAdicional','Recibo de Pago Adicional');
   _cierreData.ap.cierre_generado=true;
   registrarDocumento(_cierreData.ap.id, fn, DOC_LABELS[fn]);
   try{ window[fn](); }catch(e){ console.error('Error generando',fn,e); toast('Error al generar el documento','err'); return; }
@@ -62,7 +77,7 @@ function renderDocsProspecto(pid){
     aps.map(a=>{
       const docs=(a.documentos||[]).slice().sort((x,y)=>new Date(y.fecha)-new Date(x.fecha));
       return `<div style="margin-bottom:8px">
-        <div style="font-size:11px;color:var(--t3);margin-bottom:6px">Lote ${a.clave_lote} · ${a.estatus}${a.folio_recibo?' · Folio '+String(a.folio_recibo).padStart(8,'0'):''}</div>
+        <div style="font-size:11px;color:var(--t3);margin-bottom:6px">${ubicacionLote(a.clave_lote)} · ${a.estatus}${a.folio_recibo?' · Folio '+String(a.folio_recibo).padStart(8,'0'):''}</div>
         ${docs.map(d=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd2)">
           <div style="min-width:0"><div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📄 ${d.label}</div><div style="font-size:10.5px;color:var(--t3)">${fD(d.fecha)}</div></div>
           <button class="btn btn-out btn-xs" style="flex-shrink:0" onclick="abrirDocumentoGuardado('${a.id}','${d.fn}','${d.pagoId||''}')">⬇ Abrir</button>

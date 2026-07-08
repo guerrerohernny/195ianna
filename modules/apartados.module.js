@@ -35,7 +35,7 @@ function renderApartados(){
     const sc={Activo:'#f97316',Venta:'#10b981',Cancelado:'#ef4444','Venta Cancelada':'#dc2626'}[a.estatus]||'#8896a7';
     return `<tr>
       <td><div style="font-weight:600">${p?p.nombre:'—'}</div><div style="font-size:11.5px;color:var(--t3)">${p?p.telefono:''}</div></td>
-      <td style="font-weight:700">${a.clave_lote||'—'}${a.clave_lote_adicional?`<span style="font-size:10px;background:#eff6ff;color:#1e40af;border-radius:4px;padding:2px 5px;margin-left:4px">+${a.clave_lote_adicional}</span>`:''}</td>
+      <td style="font-weight:700">${ubicacionLote(a.clave_lote)||'—'}${a.clave_lote_adicional?`<span style="font-size:10px;background:#eff6ff;color:#1e40af;border-radius:4px;padding:2px 5px;margin-left:4px">+${ubicacionLote(a.clave_lote_adicional)}</span>`:''}</td>
       <td>${mod?mod.nombre:'—'}</td>
       <td>${as.nombre.split(' ')[0]}</td>
       <td style="font-size:12px;color:var(--t3)">${AUTORIZADOR.puede('ver_global')?`<input type="date" value="${a.fecha_apartado||''}" style="border:none;border-bottom:1px solid var(--bd2);font-size:12px;color:var(--t3);background:transparent;cursor:pointer" onchange="editarFechaApartado('${a.id}',this.value)" title="Editar fecha">`:`${fD(a.fecha_apartado)}`}</td>
@@ -78,7 +78,7 @@ function refreshModelosApartado(){
   const loteSelAp=$('ap-lote')?.value;
   const loteDataAp=loteSelAp?getLote(loteSelAp):null;
   const mzAp=loteDataAp?String(loteDataAp.mz):'';
-  const modsAll=DS.getModelos().filter(m=>m.activo&&m.id!=='SOLO_TERRENO');
+  const modsAll=DS.getModelos().filter(m=>m.activo);
   sel.innerHTML='<option value="">— Selecciona un modelo —</option>'+modsAll.map(m=>{
     const blocked=m.id==='MORELLO'&&mzAp&&mzAp!=='10';
     return `<option value="${m.id}" ${blocked?'disabled style="color:#aaa"':''}>${m.nombre}${m.precio?' — '+mxn(m.precio):''}${blocked?' (Solo Mz 10)':''}</option>`;
@@ -96,7 +96,7 @@ function onLoteChange(){
   const l=getLote(clave); if(!l) return;
   $('ap-lote-ficha').style.display='block';
   $('ap-lote-info').innerHTML=[
-    ['Clave',`<b>${l.clave}</b>`],['Manzana',l.mz],['Lote',l.lote],
+    ['Ubicación',`<b>${ubicacionLote(l)}</b>`],['Manzana',l.mz],['Lote',l.lote],
     ['Terreno',f3(l.terreno)+' m²'],['Excedente',f3(l.excedente)+' m²'],
     ['Plusvalía',l.plusvalia?mxn(l.plusvalia):'Sin plusvalía'],
     ['Tipo',l.tipo],['Valor terreno',`<b>${mxn(l.valor_terreno)}</b>`],
@@ -108,7 +108,7 @@ function onLoteChange(){
   // Lote adicional: todos los disponibles (incl. fracciones), excluyendo el principal ya seleccionado
   const dispFilt=DS.db.inventario.filter(l=>l.estado==='Disponible'&&l.clave!==claveSel);
   const apAdicEl=$('ap-lote-adic');
-  if(apAdicEl) apAdicEl.innerHTML='<option value="">— Selecciona lote adicional —</option>'+dispFilt.map(l=>`<option value="${l.clave}">Clave ${l.clave}${l.es_fraccion?' ['+l.fraccion_tipo+']':''} — ${f3(l.terreno)}m² — ${mxn(l.valor_terreno)}</option>`).join('');
+  if(apAdicEl) apAdicEl.innerHTML='<option value="">— Selecciona lote adicional —</option>'+dispFilt.map(l=>`<option value="${l.clave}">${ubicacionLote(l)}${l.es_fraccion?' ['+l.fraccion_tipo+']':''} — ${f3(l.terreno)}m² — ${mxn(l.valor_terreno)}</option>`).join('');
 }
 function onModeloChange(){
   const mid=$('ap-modelo').value;
@@ -177,7 +177,7 @@ function calcCotiz(){
     const lAd=getLote(adClave);
     if(lAd){
       const valorAd=lAd.terreno*pFrac;
-      rows.push([`Lote adicional ${lAd.clave} (${f3(lAd.terreno)}m² × ${mxn(pFrac)}/m²)`,mxn(valorAd)]);
+      rows.push([`Lote adicional ${ubicacionLote(lAd)} (${f3(lAd.terreno)}m² × ${mxn(pFrac)}/m²)`,mxn(valorAd)]);
       total+=valorAd;
     }
   }
@@ -202,7 +202,7 @@ function onLoteAdicChange(){
   $('ap-lote-adic-info').style.display='block';
   $('ap-lote-adic-info').innerHTML=`
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-      <div><div style="color:var(--t3);font-size:10.5px;margin-bottom:2px">Clave</div><div style="font-weight:700">${l.clave}</div></div>
+      <div><div style="color:var(--t3);font-size:10.5px;margin-bottom:2px">Clave</div><div style="font-weight:700">${ubicacionLote(l)}</div></div>
       <div><div style="color:var(--t3);font-size:10.5px;margin-bottom:2px">Terreno</div><div style="font-weight:600">${f3(l.terreno)}m²</div></div>
       <div><div style="color:var(--t3);font-size:10.5px;margin-bottom:2px">Precio/m²</div><div style="font-weight:600">${mxn(precioAd)}</div></div>
       <div><div style="color:var(--t3);font-size:10.5px;margin-bottom:2px">Valor</div><div style="font-weight:700;color:var(--navy)">${mxn(valorAd)}</div></div>
@@ -402,7 +402,7 @@ function _ejecutarContratoFirmado(aid){
     inventarioService.actualizarPorClave(ap.clave_lote_adicional,{estado:'Vendido'});
   }
   IANNA_PIPELINE.derivarEstatusOperacional(ap.prospectoId,'Venta',{operacion:'contrato_firmado',operacionId:aid});
-  seguimientosService.crear({prospectoId:ap.prospectoId,tipo:'Nota interna',nota:`¡VENTA CERRADA! Lote ${ap.clave_lote}`,fecha:now,usuario:CU.id,estatusCambio:'Venta'});
+  seguimientosService.crear({prospectoId:ap.prospectoId,tipo:'Nota interna',nota:`¡VENTA CERRADA! ${ubicacionLote(ap.clave_lote)}`,fecha:now,usuario:CU.id,estatusCambio:'Venta'});
   renderApartados(); renderInventario(); renderDashboard(); filterProsp();
   IANNA_MOTOR.auditar('apartados', aid, 'CONVERTIR_VENTA', {estatus:'Activo'}, {estatus:'Venta', total_operacion:totalOp, lote:ap.clave_lote}, 'Contrato firmado');
   // ── FASE 1.9: marcar la Oportunidad activa como GANADA (enlaza al APT-) ──

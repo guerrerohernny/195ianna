@@ -106,8 +106,9 @@ window.IANNA_MOTOR = {
   },
   puedeEliminarProspecto(pid){
     const r=this.relacionesDeProspecto(pid);
+    const activas=DS.find('apartados',{prospectoId:pid}).filter(a=>['Activo','Venta','Apartado','Contrato firmado','Enganche','Cobranza','Liquidado','Escrituración'].includes(a.estatus)||['Apartado','Contrato firmado','Enganche','Cobranza','Liquidado','Escrituración'].includes(a.estado_maquina));
     const total=r.apartados+r.seguimientos+r.cotizaciones;
-    return {fisico: total===0, relaciones:r};
+    return {fisico: total===0, archivable:total>0&&activas.length===0, bloqueado:activas.length>0, activas, relaciones:r};
   },
   puedeEliminarLote(clave){
     const refs=DS.find('apartados').filter(a=>a.clave_lote===clave||a.clave_lote_adicional===clave).length;

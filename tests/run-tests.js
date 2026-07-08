@@ -64,6 +64,7 @@ function cargar(rel) {
   'business/ids.business.js',
   'business/ops-engine.business.js',
   'business/financiero.business.js',
+  'business/operacion-financiera.business.js',
   'business/comisiones.business.js',
   'business/oportunidades.business.js',
   'business/pipeline.business.js',
@@ -102,6 +103,13 @@ t('consecutivos jamás se repiten', () => {
   const a = X("IANNA_IDS.asignar('venta')"), b = X("IANNA_IDS.asignar('venta')");
   verdad(a !== b, a + '==' + b);
 });
+t('inventario nuevo genera LOT- y clave física sin clave legacy', () => {
+  X("var _lotNuevo=inventarioService.crear({mz:7,lote:10,terreno:144,excedente:0,estado:'Disponible',dir_oficial:'Domicilio de prueba'});");
+  verdad(/^LOT-\d{6}$/.test(X("_lotNuevo.id_publico")));
+  eq(X("_lotNuevo.clave"), X("_lotNuevo.id_publico"));
+  eq(X("_lotNuevo.clave_fisica"), 'M0007-L0010');
+  eq(X("_lotNuevo.dir_oficial"), 'Domicilio de prueba');
+});
 
 /* ── 3 · FOLIOS (Bloque 5) ── */
 console.log('▶ IANNA_FOLIOS');
@@ -138,7 +146,7 @@ t('justificacion explica la política', () => verdad(X("AUTORIZADOR.justificacio
 /* ── 5 · PIPELINE (Etapa 2 · Bloques 1/3) ── */
 console.log('▶ IANNA_PIPELINE (flujo único de estatus)');
 X("var _pTest = prospectosService.crear({nombre:'Prueba Pipeline', telefono:'667 000 0001', estatus:'Nuevo', asesor:'u_test', fechaRegistro:new Date().toISOString()});");
-t('DS.create sella schema_version 1.95', () => eq(X("_pTest.schema_version"), '1.95'));
+t('DS.create sella schema_version 1.96', () => eq(X("_pTest.schema_version"), '1.96'));
 t('cambio CRM válido procede y deja traza', () => {
   const r = X("IANNA_PIPELINE.solicitarEstatus(_pTest.id,'Contactado','Prueba')");
   verdad(r.ok, JSON.stringify(r));
@@ -185,6 +193,12 @@ t('efectivoOperacion distingue método (LFPIORPI intacto)', () =>
 t('registrarIngreso suma al ledger', () => {
   X("IANNA_FIN.registrarIngreso({operacionId:_apF.id, personaId:_pTest.id, monto:10000, metodo:'Transferencia', documento:'00999999', concepto:'Pago prueba', politica_version:'v1', motivo:'test'})");
   eq(X("IANNA_FIN.ingresosNetosOperacion(_apF.id)"), 110000);
+});
+t('ajuste de ingreso documentado compensa y reemplaza sin mutar el movimiento original', () => {
+  X("var _aj1=IANNA_FIN.ajustarIngresoDocumentado({operacionId:'op-aj',personaId:_pTest.id,monto:500000,metodo:'Transferencia',documento:'REC-AJ',concepto:'Pago adicional',politica_version:'v1',motivo:'test'});");
+  X("var _aj2=IANNA_FIN.ajustarIngresoDocumentado({operacionId:'op-aj',personaId:_pTest.id,monto:400000,metodo:'Transferencia',documento:'REC-AJ',concepto:'Pago adicional',politica_version:'v1',motivo:'corrección test'});");
+  eq(X("IANNA_FIN.ingresosNetosOperacion('op-aj')"),400000);
+  verdad(X("IANNA_FIN.movimientosDe('op-aj').some(m=>m.tipo==='cancelacion'&&m.movimiento_compensa)"),'sin compensación');
 });
 t('las cancelaciones COMPENSAN, jamás borran (append-only)', () => {
   const antes = X("IANNA_FIN.movimientosDe(_apF.id).length");
@@ -248,6 +262,45 @@ t('migrarLlavesLegadas absorbe llaves sueltas del navegador', () => {
   eq(X("DS.getExt('va_sb_url')"), 'https://x.supabase.co');
   verdad(!('va_sb_url' in almacen), 'la llave legada no se removió');
 });
+
+
+/* ── 10 · FASE 1.96: PRODUCTO COMERCIAL / FINANCIERO ── */
+console.log('▶ Fase 1.96 (Business Rules & UX Hardening)');
+t('UBICACION usa M + 4 dígitos / L + 4 dígitos', () => eq(X("IANNA_FMT.UBICACION(7,10)"),'M0007-L0010'));
+X("DS.db.inventario.push({clave:'L196',mz:7,lote:10,terreno:144,excedente:10,plusvalia:50000,estado:'Disponible'}); DS.db.modelos.push({id:'MOD196',nombre:'Modelo 196',precio:4670000,activo:true}); DS._save(DS.db);");
+X("var _ap196={id:'ap196',clave_lote:'L196',modelo_id:'MOD196',construccion_adicional_val:700000,asesor:'u_test',prospectoId:_pTest.id,datos_cierre:{fin_descuento:'100,000'}};");
+t('valor total vivienda usa vivienda + excedente + construcción adicional + plusvalía', () => eq(X("IANNA_VALOR.valorTotalVivienda(_ap196)"),5510000));
+t('Solo Terreno usa superficie × tarifa + plusvalía', () => eq(X("IANNA_VALOR.valorTotalVivienda({..._ap196,modelo_id:'SOLO_TERRENO',construccion_adicional_val:0})"),2138000));
+t('base comisionable excluye gastos y aplica descuento', () => {
+  const c=X("IANNA_COM.baseComisionable(_ap196)"); eq(c.base,5410000);
+});
+t('comisión especial contado puede activarse por política', () => {
+  const c=X(`(()=>{const p=JSON.parse(JSON.stringify(IANNA_COM.politicaActual()));p.reglas_especiales={contado:{activa:true,porcentaje_asesor:0.03}};return IANNA_COM.comisionAsesor({..._ap196,datos_cierre:{..._ap196.datos_cierre,tipoCredito:'contado'},politica_snapshot:p})})()`);
+  verdad(Math.abs(c.porcentaje-0.03)<1e-9,'pct='+c.porcentaje); eq(c.regla_especial_aplicada,'contado');
+});
+t('Contado precarga solo Avalúo y Escrituración', () => {
+  const g=X("IANNA_VALOR.gastosSugeridos(_ap196,0,'contado').map(x=>x.id)");
+  eq(g.length,2); verdad(g.includes('avaluo')&&g.includes('gastos_notariales'),JSON.stringify(g));
+});
+
+t('distribución de comisión admite 3 partes 20/50/30', () => {
+  const c=X(`(()=>{const p=JSON.parse(JSON.stringify(IANNA_COM.politicaActual()));p.distribucion_asesor=[{parte:'firma',nombre:'Firma',pct:.2},{parte:'enganche',nombre:'Enganche',pct:.5},{parte:'escritura',nombre:'Escritura',pct:.3}];return IANNA_COM.comisionAsesor({..._ap196,politica_snapshot:p})})()`);
+  eq(c.partes.length,3); verdad(Math.abs(c.partes.reduce((s,x)=>s+x.monto,0)-c.total)<1,'partes no cuadran');
+});
+t('snapshot financiero congela valor comercial y gastos', () => {
+  const fs=X("IANNA_VALOR.snapshot(_ap196,{gastos:IANNA_VALOR.gastosSugeridos(_ap196,0,'contado'),apartado:50000,descuento:100000,pago_adicional:0,credito_pct:0,credito_monto:0,desembolso:0,base_comisionable:5410000,base_snapshot:{total:5410000}})");
+  eq(fs.valor_total_vivienda,5510000); eq(fs.gastos_operacion.length,2); verdad(Object.isFrozen(fs)&&Object.isFrozen(fs.gastos_operacion),'snapshot no congelado');
+});
+t('base de porcentaje de crédito es valor total vivienda antes de gastos y descuento', () => {
+  const base=X("IANNA_VALOR.valorTotalVivienda(_ap196)"); eq(base,5510000); eq(Math.round(base*.6),3306000);
+});
+t('COFINAVIT está modelado como financiamiento mixto', () => {
+  const i=X("MASTER_PARAMS.instituciones.find(x=>x.id==='cofinavit')"); eq(i.tipo,'mixto'); eq(i.componente_publico,'INFONAVIT');
+});
+t('FOVISSSTE Para Todos está modelado como mixto', () => {
+  const i=X("MASTER_PARAMS.instituciones.find(x=>x.id==='fovissste_todos')"); eq(i.tipo,'mixto'); eq(i.componente_publico,'FOVISSSTE');
+});
+t('Crédito IMSS se comporta como tradicional', () => eq(X("MASTER_PARAMS.instituciones.find(x=>x.id==='credito_imss').tipo"),'tradicional'));
 
 /* ── resumen ── */
 console.log('\n═════════════════════════════════════');

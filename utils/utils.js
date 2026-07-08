@@ -34,5 +34,6 @@ function fmtTel(inp){ const v=inp.value; inp.value=fmtTelVal(v); }
 function getUser(id){ return DS.findOne('usuarios',id)||{nombre:'Sin asignar',id:''}; }
 function getLote(c){ return (DS.db.inventario||[]).find(l=>l.clave===String(c)); }
 function getMod(id){ return DS.getModelos().find(m=>m.id===id); }
+function ubicacionLote(ref){ const l=typeof ref==='object'?ref:getLote(ref); if(!l) return ''; const base=l.clave_fisica||((typeof IANNA_FMT!=='undefined')?IANNA_FMT.UBICACION(l.mz,l.lote):('M'+String(l.mz).padStart(4,'0')+'-L'+String(l.lote).padStart(4,'0'))); const suf=l.es_fraccion?(l.fraccion_tipo?'-'+String(l.fraccion_tipo).toUpperCase():''):''; return base+suf; }
 function getP(){ return DS.getParams(); }
 

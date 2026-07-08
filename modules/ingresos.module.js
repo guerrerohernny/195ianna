@@ -28,15 +28,20 @@ function renderIngresos(){
   // ── 1.95 (Etapa 4): la comisión SOLO sale del Motor de Comisiones (política versionada,
   //    base comisionable configurable, snapshot congelado en la Operación). Estos adaptadores
   //    únicamente traducen el desglose del motor al formato de esta vista. ──
-  const _adaptaCom = (c, cobr1, cobr2) => {
-    const parte1 = c.partes[0]?.monto ?? c.total/2;
-    const parte2 = c.partes.length>1 ? c.partes.slice(1).reduce((s,x)=>s+x.monto,0) : c.total-parte1;
-    const cobrada1 = cobr1 ? parte1 : 0;
-    const cobrada2 = cobr2 ? parte2 : 0;
-    return {total:c.total, parte1, parte2, cobrada1, cobrada2, totalCobrado:cobrada1+cobrada2, isBroker:!!c.es_broker, pct:c.porcentaje, politica_version:c.politica_version, base:c.base};
+  const _adaptaCom = (c, venta, quien) => {
+    const mapa=venta.comision_partes_cobradas||{};
+    const legacyPrefix=quien==='ger'?'comision_ger_parte':'comision_parte';
+    const partes=(c.partes||[]).map((p,i)=>{
+      const key=p.parte||('parte_'+(i+1));
+      const legacy=i<2 ? !!venta[legacyPrefix+(i+1)+'_cobrada'] : false;
+      const cobrada=mapa[quien+':'+key]===true || legacy;
+      return {...p,key,cobrada};
+    });
+    const totalCobrado=partes.filter(x=>x.cobrada).reduce((a,x)=>a+Number(x.monto||0),0);
+    return {total:c.total,partes,totalCobrado,isBroker:!!c.es_broker,pct:c.porcentaje,politica_version:c.politica_version,base:c.base};
   };
-  const calcComisionAsesor  = (v) => _adaptaCom(IANNA_COM.comisionAsesor(v),  v.comision_parte1_cobrada,     v.comision_parte2_cobrada);
-  const calcComisionGerente = (v) => _adaptaCom(IANNA_COM.comisionGerente(v), v.comision_ger_parte1_cobrada, v.comision_ger_parte2_cobrada);
+  const calcComisionAsesor  = (v) => _adaptaCom(IANNA_COM.comisionAsesor(v),v,'asesor');
+  const calcComisionGerente = (v) => _adaptaCom(IANNA_COM.comisionGerente(v),v,'ger');
   // El gerente/admin ve y cobra SU comisión (0.5%); el asesor la suya (2%/1%)
   const calcComision = isAdmin ? calcComisionGerente : calcComisionAsesor;
 
@@ -49,7 +54,8 @@ function renderIngresos(){
   });
 
   // Totals
-  const totalFacturado = ventasData.reduce((s,v)=>s+(v.total_operacion||0),0);
+  const valorComercialVenta = (v) => Number(v.financial_snapshot?.valor_total_vivienda ?? v.valor_operacion ?? IANNA_VALOR?.valorTotalVivienda?.(v) ?? 0);
+  const totalFacturado = ventasData.reduce((s,v)=>s+valorComercialVenta(v),0);
   const totalGanado = ventasData.reduce((s,v)=>s+v.com.total,0);
   const totalCobrado = ventasData.reduce((s,v)=>s+v.com.totalCobrado,0);
   const totalPorCobrar = totalGanado - totalCobrado;
@@ -90,14 +96,14 @@ function renderIngresos(){
       ${isAdmin?`<div class="card" style="padding:18px 20px">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);margin-bottom:10px">Comisiones de asesores</div>
         <div style="font-size:22px;font-weight:800;color:var(--navy)">${mxn(totalComAsesores)}</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:4px">2% directa · 1% con broker</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">Según política vigente de cada operación</div>
       </div>`:''}
     </div>`;
 
   // Table
   const tableSubtitle = isAdmin
-    ? 'Tu comisión: 0.5% de cada venta del equipo (mitad a la firma, mitad a la escritura)'
-    : '2% venta directa · 1% con broker (mitad a la firma, mitad a la escritura)';
+    ? 'Tu comisión según política versionada de cada operación'
+    : 'Comisión según política versionada y distribución configurada';
   const quien = isAdmin ? 'ger' : 'asesor';
   const tableHtml = ventasData.length===0 ? `<div class="empty"><div class="empty-i">💰</div><p>Sin ventas en el período seleccionado</p></div>` : `
     <div class="card" style="overflow:hidden;padding:0">
@@ -113,8 +119,7 @@ function renderIngresos(){
           <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--t3);font-weight:700;text-transform:uppercase">Modelo</th>
           ${isAdmin?'<th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--t3);font-weight:700;text-transform:uppercase">Asesor</th>':''}
           <th style="padding:8px 12px;text-align:right;font-size:11px;color:var(--t3);font-weight:700;text-transform:uppercase">${isAdmin?'Mi comisión':'Comisión'}</th>
-          <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--t3);font-weight:700;text-transform:uppercase">1ª parte (firma)</th>
-          <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--t3);font-weight:700;text-transform:uppercase">2ª parte (escritura)</th>
+          <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--t3);font-weight:700;text-transform:uppercase">Distribución y cobro</th>
         </tr></thead>
         <tbody>
         ${ventasData.map(v=>`<tr style="border-bottom:1px solid var(--s2)">
@@ -122,22 +127,17 @@ function renderIngresos(){
             <div style="font-weight:600">${v.p.nombre||'—'}</div>
             <div style="font-size:10.5px;color:var(--t3)">${v.fecha_venta?new Date(v.fecha_venta).toLocaleDateString('es-MX'):'—'}${v.com.isBroker?' · <span style="color:#f97316;font-size:10px">Broker</span>':''}</div>
           </td>
-          <td style="padding:10px 12px">${v.clave_lote||'—'}</td>
+          <td style="padding:10px 12px">${ubicacionLote(v.clave_lote)||'—'}</td>
           <td style="padding:10px 12px">${v.m.nombre||'—'}</td>
           ${isAdmin?`<td style="padding:10px 12px;font-size:12px">${getUser(v.asesor).nombre.split(' ')[0]}</td>`:''}
           <td style="padding:10px 12px;text-align:right">
             <div style="font-weight:700">${mxn(v.com.total)}</div>
-            <div style="font-size:10px;color:var(--t3)">${(v.com.pct*100).toFixed(v.com.pct<0.01?1:0)}% de ${mxn(v.total_operacion||0)}</div>
+            <div style="font-size:10px;color:var(--t3)">${(v.com.pct*100).toFixed(v.com.pct<0.01?1:0)}% de ${mxn(v.com.base||0)}</div>
           </td>
-          <td style="padding:10px 12px;text-align:center">
-            ${v.com.cobrada1>0
-              ? `<div style="display:inline-flex;align-items:center;gap:4px;background:#f0fdf4;color:#166534;border-radius:6px;padding:4px 8px;font-size:11.5px"><span>✓</span> ${mxn(v.com.parte1)}</div>`
-              : `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="font-size:11.5px;color:var(--t2)">${mxn(v.com.parte1)}</div><button class="btn btn-gold btn-xs" onclick="cobrarComision('${v.id}',1,'${quien}')" style="font-size:10px">Cobrar</button></div>`}
-          </td>
-          <td style="padding:10px 12px;text-align:center">
-            ${v.com.cobrada2>0
-              ? `<div style="display:inline-flex;align-items:center;gap:4px;background:#f0fdf4;color:#166534;border-radius:6px;padding:4px 8px;font-size:11.5px"><span>✓</span> ${mxn(v.com.parte2)}</div>`
-              : `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="font-size:11.5px;color:var(--t2)">${mxn(v.com.parte2)}</div><button class="btn btn-out btn-xs" onclick="cobrarComision('${v.id}',2,'${quien}')" style="font-size:10px">Cobrar</button></div>`}
+          <td style="padding:10px 12px">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              ${v.com.partes.map((pt,idx)=>`<div style="display:grid;grid-template-columns:1.2fr .55fr auto;gap:6px;align-items:center"><span style="font-size:11px">${pt.nombre||pt.parte}</span><b style="font-size:11px">${mxn(pt.monto)}</b>${pt.cobrada?'<span class="badge" style="background:#f0fdf4;color:#166534">✓ Cobrado</span>':`<button class="btn btn-gold btn-xs" onclick="cobrarComisionParte('${v.id}','${pt.key}','${quien}')">Cobrar</button>`}</div>`).join('')}
+            </div>
           </td>
         </tr>`).join('')}
         </tbody>
@@ -150,7 +150,7 @@ function renderIngresos(){
     const asesores = DS.find('usuarios',{rol:'asesor',activo:true});
     const rows = asesores.map(a=>{
       const ventasA = DS.find('apartados').filter(v=>v.estatus==='Venta'&&v.asesor===a.id);
-      const facturadoA = ventasA.reduce((s,v)=>s+(v.total_operacion||0),0);
+      const facturadoA = ventasA.reduce((s,v)=>s+valorComercialVenta(v),0);
       const comA = ventasA.reduce((s,v)=>s+calcComisionAsesor(v).total,0);
       return {a, facturadoA, comA, n:ventasA.length};
     }).filter(r=>r.facturadoA>0).sort((a,b)=>b.facturadoA-a.facturadoA);
@@ -169,16 +169,19 @@ function renderIngresos(){
   container.innerHTML = headerHtml + tableHtml + equipoHtml;
 }
 
+function cobrarComisionParte(ventaId, parteKey, quien){
+  const ap=apartadosService.obtener(ventaId); if(!ap){toast('Venta no encontrada','err');return;}
+  const motor=quien==='ger'?IANNA_COM.comisionGerente(ap):IANNA_COM.comisionAsesor(ap);
+  const pt=(motor.partes||[]).find(x=>(x.parte||'')===parteKey); if(!pt){toast('Parte de comisión no encontrada','err');return;}
+  if(!confirm(`¿Confirmar cobro de ${pt.nombre||pt.parte} por ${mxn(pt.monto)}?`)) return;
+  const mapa={...(ap.comision_partes_cobradas||{})}; mapa[quien+':'+parteKey]=true;
+  apartadosService.actualizar(ventaId,{comision_partes_cobradas:mapa,comision_ultima_actualizacion:new Date().toISOString()});
+  try{IANNA_MOTOR.auditar('comisiones',ventaId,'COBRAR_PARTE_COMISION',{}, {quien,parte:parteKey,monto:pt.monto},'Cobro de parte de comisión');}catch(e){}
+  renderIngresos(); toast('Parte de comisión marcada como cobrada ✓','ok');
+}
+// Compatibilidad con botones históricos
 function cobrarComision(ventaId, parte, quien){
-  const ap = DS.findOne('apartados', ventaId);
-  if(!ap){ toast('Venta no encontrada','err'); return; }
-  quien = quien||'asesor';
-  const prefix = quien==='ger' ? 'comision_ger_parte' : 'comision_parte';
-  const campo = prefix + parte + '_cobrada';
-  const label = (parte===1 ? 'primera parte (firma de contrato)' : 'segunda parte (escritura)') + (quien==='ger'?' — comisión del gerente':'');
-  if(!confirm(`¿Confirmar cobro de la ${label}?`)) return;
-  apartadosService.actualizar( ventaId, {[campo]: true, [prefix+parte+'_fecha']: new Date().toISOString()});
-  renderIngresos();
-  toast(`Comisión parte ${parte} marcada como cobrada ✓`,'ok');
+  const ap=apartadosService.obtener(ventaId); const motor=quien==='ger'?IANNA_COM.comisionGerente(ap):IANNA_COM.comisionAsesor(ap);
+  const pt=(motor.partes||[])[Math.max(0,Number(parte)-1)]; if(pt) cobrarComisionParte(ventaId,pt.parte,quien);
 }
 

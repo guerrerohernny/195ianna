@@ -11,7 +11,7 @@
    · La migración inicial asigna públicos a todo lo existente en
      orden de creación, una sola vez, y queda auditada.
 
-   Clave física de ubicación: M###-L### (manzana y lote a 3 dígitos),
+   Clave física de ubicación: M0000-L0000 (manzana y lote a 4 dígitos),
    derivada y persistida en cada lote como `clave_fisica`. No
    sustituye al id interno ni a la clave operativa.
    ════════════════════════════════════════════════════════════════ */
@@ -34,10 +34,10 @@ window.IANNA_IDS = {
     return pref+'-'+String(DS.db.id_seq[pref]).padStart(6,'0');
   },
 
-  // Clave física de ubicación: M###-L###
+  // Clave física de ubicación: M0000-L0000
   claveFisica(l){
     if(!l) return '';
-    const num=v=>String(parseInt(String(v).replace(/\D/g,''))||0).padStart(3,'0');
+    const num=v=>String(parseInt(String(v).replace(/\D/g,''))||0).padStart(4,'0');
     return 'M'+num(l.mz)+'-L'+num(l.lote);
   },
 
@@ -92,5 +92,20 @@ window.IANNA_IDS = {
     const p=a&&DS.findOne('prospectos',a.prospectoId);
     if(p&&!p.id_cliente) DS.update('prospectos',p.id,{id_cliente:this.asignar('cliente')});
   },
+  migrar196(){
+    if(DS.db.migracion_196_identidad) return false;
+    let clientes=0, lotes=0;
+    (DS.db.inventario||[]).forEach(l=>{ const nueva=this.claveFisica(l); if(l.clave_fisica!==nueva){ l.clave_fisica=nueva; lotes++; } });
+    (DS.db.prospectos||[]).forEach(p=>{
+      const tieneVenta=(DS.db.apartados||[]).some(a=>a.prospectoId===p.id && ['Venta','Venta Cancelada'].includes(a.estatus));
+      if(tieneVenta && !p.id_cliente){ p.id_cliente=this.asignar('cliente'); clientes++; }
+      if(p.num_cliente) delete p.num_cliente;
+    });
+    DS.db.migracion_196_identidad={fecha:new Date().toISOString(),clientes,lotes};
+    DS._save(DS.db);
+    try{ IANNA_MOTOR.auditar('sistema','ids','MIGRACION_196_IDENTIDAD',{},{clientes,lotes},'CLI oficial y claves físicas M0000-L0000'); }catch(e){}
+    return true;
+  },
+
   alCrearLote(clave){ const l=getLote(clave); if(l&&!l.id_publico){ const i=DS.db.inventario.findIndex(x=>x.clave===clave); DS.db.inventario[i]={...l,id_publico:this.asignar('lote'),clave_fisica:this.claveFisica(l)}; DS._save(DS.db);} },
 };

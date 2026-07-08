@@ -94,7 +94,7 @@ function renderInventario(){
       const modeloTxt=l.modelo_asignado?`<div style="font-size:8px;opacity:.75">${l.modelo_asignado}</div>`:'';
       return `<div class="lc ${cls}" onclick="openLoteDetail('${l.clave}')">
         ${l.fraccion_de?'<div style="font-size:8px;font-weight:700;opacity:.7;margin-bottom:1px">FRACC.</div>':''}
-        <div class="lc-cl">${l.clave}</div>
+        <div class="lc-cl">${ubicacionLote(l)}</div>
         <div class="lc-m2">${f3(l.terreno)}m²</div>
         ${fusionBadge}${modeloTxt}${clienteTxt}
       </div>`;
@@ -105,7 +105,7 @@ function renderInventario(){
     const estDisp=l.estado_display||l.estado;
     const sc={Disponible:'#10b981','Entrega Rápida':'#f97316','Lote Especial':'#8b5cf6','Casa Muestra':'#3b82f6',Apartado:'#eab308',Vendido:'#ef4444',Subdividido:'#94a3b8'}[estDisp]||'#8896a7';
     return `<tr ${l.fraccion_de?'style="background:#fafbff"':''}>
-      <td style="font-weight:700">${l.clave}${l.fraccion_de?'<span style="font-size:10px;color:var(--t3);margin-left:4px">fracc.</span>':''}</td>
+      <td style="font-weight:700">${ubicacionLote(l)}${l.fraccion_de?'<span style="font-size:10px;color:var(--t3);margin-left:4px">fracc.</span>':''}</td>
       <td>${l.mz}</td><td>${l.lote}</td>
       <td><span class="badge" style="background:${sc}18;color:${sc}"><span class="bdot" style="background:${sc}"></span>${estDisp}</span></td>
       <td style="font-size:12px">${l.modelo_asignado||'—'}</td>
@@ -127,12 +127,12 @@ function setInvView(m){
 }
 function openLoteDetail(clave){
   const l=getLote(clave); if(!l) return;
-  $('ld-ttl').textContent=`Clave ${l.clave} — Mz ${l.mz} Lote ${l.lote}`;
+  $('ld-ttl').textContent=` ${ubicacionLote(l)}`;
   const estDisp=l.modelo_asignado&&!['Apartado','Vendido','Casa Muestra','Subdividido'].includes(l.estado)?'Entrega Rápida':(l.fraccion_fusionada&&l.estado==='Lote Especial'?'Lote Especial':l.estado);
   const sc={'Disponible':'#10b981','Entrega Rápida':'#f97316','Lote Especial':'#8b5cf6','Casa Muestra':'#3b82f6','Apartado':'#eab308','Vendido':'#ef4444','Subdividido':'#94a3b8'}[estDisp]||'#8896a7';
   // Fracciones derivadas (si este lote fue subdividido)
   const detRows=[
-    ['Clave',l.clave],['Manzana',l.mz],['Lote',l.lote],
+    ['ID',l.id_publico||'—'],['Ubicación',ubicacionLote(l)],['Manzana',l.mz],['Lote',l.lote],
     ['Estado',`<span class="badge" style="background:${sc}18;color:${sc}">${estDisp}</span>`],
     ['Terreno',f3(l.terreno)+' m²'],['Excedente',f3(l.excedente)+' m²'],
     ['Plusvalía',l.plusvalia?mxn(l.plusvalia):'—'],['Tipo',l.tipo],
@@ -143,8 +143,8 @@ function openLoteDetail(clave){
   if(l.fraccion_fusionada) detRows.push(['Fracción',`${f3(l.fraccion_m2_adicional||0)}m² de lote ${l.fraccion_de||'—'}`]);
   const fracciones=DS.db.inventario.filter(x=>x.lote_origen===clave);
   $('ld-body').innerHTML=`<div class="infop">${detRows.map(r=>`<div class="ir"><span class="il">${r[0]}</span><span class="iv">${r[1]}</span></div>`).join('')}</div>`
-  +(fracciones.length?`<div style="margin-top:12px;border-top:1px solid var(--bd);padding-top:10px"><div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Fracciones generadas</div>${fracciones.map(f=>{const fc={Disponible:'#10b981',Apartado:'#eab308',Vendido:'#ef4444'}[f.estado]||'#8896a7';return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px"><b>${f.clave}</b>&nbsp;${f3(f.terreno)}m²<span class="badge" style="background:${fc}18;color:${fc};font-size:10px">${f.estado}</span></div>`;}).join('')}</div>`:'')+
-  (l.lote_origen?`<div style="margin-top:8px;padding:7px 10px;background:var(--s2);border-radius:6px;font-size:12px;color:var(--t2)">✂️ Fracción del lote <b>${l.lote_origen}</b></div>`:'');
+  +(fracciones.length?`<div style="margin-top:12px;border-top:1px solid var(--bd);padding-top:10px"><div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Fracciones generadas</div>${fracciones.map(f=>{const fc={Disponible:'#10b981',Apartado:'#eab308',Vendido:'#ef4444'}[f.estado]||'#8896a7';return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px"><b>${ubicacionLote(f)}</b>&nbsp;${f3(f.terreno)}m²<span class="badge" style="background:${fc}18;color:${fc};font-size:10px">${f.estado}</span></div>`;}).join('')}</div>`:'')+
+  (l.lote_origen?`<div style="margin-top:8px;padding:7px 10px;background:var(--s2);border-radius:6px;font-size:12px;color:var(--t2)">✂️ Fracción del lote <b>${ubicacionLote(l.lote_origen)}</b></div>`:'');
   const isG=AUTORIZADOR.puede('gestionar_inventario');
   let footBtns=`<button class="btn btn-out" onclick="closeM('m-lote')">Cerrar</button>`;
   const vendible=['Disponible','Entrega Rápida','Lote Especial'].includes(estDisp);
@@ -161,9 +161,9 @@ function openSepararFraccion(clave){
   const pFrac=l.fraccion_precio_m2||P.precio_m2_lote_adicional||13000;
   const pExc=l.excedente_precio_m2||P.precio_m2_exc||9000;
   const fracM2=l.fraccion_m2_adicional||0;
-  $('sep-info').innerHTML=`Este lote tiene fusionada una fracción de <b>${f3(fracM2)}m²</b> proveniente del lote <b>${l.fraccion_de||'—'}</b>.<br>Al separar, el lote vuelve a <b>${f3(l.terreno-fracM2)}m²</b>.`;
+  $('sep-info').innerHTML=`Este lote tiene fusionada una fracción de <b>${f3(fracM2)}m²</b> proveniente del lote <b>${ubicacionLote(l.fraccion_de)||'—'}</b>.<br>Al separar, el lote vuelve a <b>${f3(l.terreno-fracM2)}m²</b>.`;
   const disponibles=DS.db.inventario.filter(x=>x.clave!==clave&&x.mz===l.mz&&!['Apartado','Vendido','Casa Muestra','Subdividido'].includes(x.estado));
-  $('sep-lote-dest').innerHTML='<option value="">— Selecciona lote destino —</option>'+disponibles.map(x=>`<option value="${x.clave}">Clave ${x.clave} — ${f3(x.terreno)}m²</option>`).join('');
+  $('sep-lote-dest').innerHTML='<option value="">— Selecciona lote destino —</option>'+disponibles.map(x=>`<option value="${x.clave}">${ubicacionLote(x)} — ${f3(x.terreno)}m²</option>`).join('');
   // ── ¿Se puede reactivar el lote original? Solo si TODAS las fracciones derivadas están en lotes disponibles ──
   const orig=l.fraccion_de||'';
   const lOriginal=orig?getLote(orig):null;
@@ -173,11 +173,11 @@ function openSepararFraccion(clave){
   const rWrap=$('sep-opt-reactivar-wrap'), rRadio=$('sep-modo-reactivar'), rDesc=$('sep-reactivar-desc');
   if(puedeReactivar){
     rRadio.disabled=false; rWrap.style.opacity='1'; rWrap.style.cursor='pointer';
-    rDesc.innerHTML=`Ambas fracciones están disponibles. Se retiran las fracciones de <b>${hermanos.map(h=>h.clave).join('</b> y <b>')}</b> (regresan a su tamaño original) y el lote <b>${orig}</b> (${f3(lOriginal.terreno)}m²) vuelve a estar <b>Disponible</b>.`;
+    rDesc.innerHTML=`Ambas fracciones están disponibles. Se retiran las fracciones de <b>${hermanos.map(h=>ubicacionLote(h)).join('</b> y <b>')}</b> (regresan a su tamaño original) y el lote <b>${ubicacionLote(lOriginal)}</b> (${f3(lOriginal.terreno)}m²) vuelve a estar <b>Disponible</b>.`;
   } else {
     rRadio.disabled=true; rWrap.style.opacity='.55'; rWrap.style.cursor='not-allowed';
     rDesc.innerHTML=noDisp.length
-      ?`⛔ No disponible: la fracción en <b>${noDisp.map(h=>h.clave+' ('+h.estado+')').join('</b>, <b>')}</b> ya está comprometida. Solo puedes reasignar esta fracción a otro lote disponible.`
+      ?`⛔ No disponible: la fracción en <b>${noDisp.map(h=>ubicacionLote(h)+' ('+h.estado+')').join('</b>, <b>')}</b> ya está comprometida. Solo puedes reasignar esta fracción a otro lote disponible.`
       :`⛔ No disponible: no se encontró el lote original subdividido.`;
   }
   $('sep-modo-reasignar').checked=true;
@@ -194,9 +194,9 @@ function reactivarLote(clave){
   // Advertir si existen fracciones activas
   const fracciones=DS.db.inventario.filter(x=>x.lote_origen===clave);
   const fracActivas=fracciones.filter(x=>x.estado!=='Vendido');
-  let advertencia=`¿Reactivar el lote ${clave} (${f3(l.terreno)}m²) a estado Disponible?\n\nEsta acción permite volver a usar el lote original.`;
+  let advertencia=`¿Reactivar el lote ${ubicacionLote(l)} (${f3(l.terreno)}m²) a estado Disponible?\n\nEsta acción permite volver a usar el lote original.`;
   if(fracActivas.length){
-    const detalle=fracActivas.map(f=>`• ${f.clave}: ${f3(f.terreno)}m² — ${f.estado}`).join('\n');
+    const detalle=fracActivas.map(f=>`• ${ubicacionLote(f)}: ${f3(f.terreno)}m² — ${f.estado}`).join('\n');
     advertencia+=`\n\n⚠️ ADVERTENCIA: Existen ${fracActivas.length} fracción(es) derivada(s) aún activa(s):\n${detalle}\n\nReactivar el lote original NO elimina las fracciones. Ambos coexistirán en el inventario. ¿Deseas continuar?`;
   }
   if(!confirm(advertencia)) return;
@@ -205,11 +205,11 @@ function reactivarLote(clave){
   if(!inventarioService.actualizarPorClave(clave,{estado:'Disponible',historial:hist})) return;
   closeM('m-lote');
   renderInventario(); populateSelects();
-  toast(`Lote ${clave} reactivado a Disponible ✓`,'ok',4000);
+  toast(`${ubicacionLote(l)} reactivado a Disponible ✓`,'ok',4000);
 }
 function openLoteModal(clave=null){
   const isEdit=!!clave;
-  $('le-ttl').textContent=isEdit?`Editar Lote ${clave}`:'Nuevo Lote';
+  $('le-ttl').textContent=isEdit?`Editar ${ubicacionLote(getLote(clave))}`:'Nuevo Lote';
   $('le-id').value=clave||'';
   $('le-del-btn').style.display=isEdit?'inline-flex':'none';
   $('le-div-preview').style.display='none';
@@ -265,11 +265,12 @@ function calcDivision(){
   const clave=$('le-id').value;
   const l=clave?getLote(clave):null;
   if(a>0&&b>0&&a<ter){
-    const vA=a*14500+(l?l.plusvalia||0:0); // full precision preview
-    const vB=b*14500;
+    const pSolo=getP().precio_m2_solo||14500;
+    const vA=a*pSolo+(l?l.plusvalia||0:0); // full precision preview
+    const vB=b*pSolo;
     $('le-div-result').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
-      <div style="background:#f0fdf4;border-radius:8px;padding:10px;font-size:12px"><b>${clave}A</b><br>${f3(a)}m² · ${mxn(vA)}</div>
-      <div style="background:#eff6ff;border-radius:8px;padding:10px;font-size:12px"><b>${clave}B</b><br>${f3(b)}m² · ${mxn(vB)}</div></div>`;
+      <div style="background:#f0fdf4;border-radius:8px;padding:10px;font-size:12px"><b>${ubicacionLote(l)}-A</b><br>${f3(a)}m² · ${mxn(vA)}</div>
+      <div style="background:#eff6ff;border-radius:8px;padding:10px;font-size:12px"><b>${ubicacionLote(l)}-B</b><br>${f3(b)}m² · ${mxn(vB)}</div></div>`;
   } else { $('le-div-result').textContent=a>=ter?'⚠ El lote A no puede ser igual o mayor al original':''; }
 }
 function confirmarDivision(){
@@ -279,13 +280,14 @@ function confirmarDivision(){
   const terB=parseFloat($('le-div-b').value)||0;
   if(!terA||!terB||terA<=0||terB<=0){toast('Define los m² de cada fracción','err');return;}
   if(Math.abs(terA+terB-l.terreno)>0.001){toast('Los m² no suman el total del lote original','err');return;}
+  const pFrac=getP().precio_m2_lote_adicional||13000;
   const disponiblesEnMz=DS.db.inventario.filter(x=>x.clave!==clave&&x.mz===l.mz&&!['Apartado','Vendido','Casa Muestra','Subdividido'].includes(x.estado));
   if(disponiblesEnMz.length<2){toast('Se necesitan al menos 2 lotes disponibles en la manzana para fusionar','err');return;}
-  const opts=disponiblesEnMz.map(x=>`<option value="${x.clave}">Clave ${x.clave} — Lote ${x.lote} (${f3(x.terreno)}m²)</option>`).join('');
-  $('fusion-ttl').textContent=`Dividir Lote ${clave} y fusionar fracciones`;
+  const opts=disponiblesEnMz.map(x=>`<option value="${x.clave}">${ubicacionLote(x)} (${f3(x.terreno)}m²)</option>`).join('');
+  $('fusion-ttl').textContent=`Dividir ${ubicacionLote(l)} y fusionar fracciones`;
   $('fusion-info').innerHTML=`
-    <b>Fracción A: ${f3(terA)}m²</b> — precio: $13,500/m²<br>
-    <b>Fracción B: ${f3(terB)}m²</b> — precio: $13,500/m²<br><br>
+    <b>Fracción A: ${f3(terA)}m²</b> — precio: ${mxn(pFrac)}/m²<br>
+    <b>Fracción B: ${f3(terB)}m²</b> — precio: ${mxn(pFrac)}/m²<br><br>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
       <div><label style="font-size:11px;font-weight:700;color:#1e40af;display:block;margin-bottom:4px">Fracción A → fusionar con:</label>
         <select id="fusion-dest-a" onchange="previewFusion()" style="width:100%;border:1.5px solid #bfdbfe;border-radius:6px;padding:6px 8px;font-size:12.5px"><option value="">— Selecciona —</option>${opts}</select></div>
@@ -300,17 +302,17 @@ function previewFusion(){
   const da=$('fusion-dest-a')?.value; const db=$('fusion-dest-b')?.value;
   if(!da||!db||!window._divisionPendiente){$('fusion-preview').style.display='none';return;}
   const {terA,terB}=window._divisionPendiente;
-  const P=getP(); const pFrac=P.precio_m2_lote_adicional||13000; const pExc=P.precio_m2_exc||9000;
+  const P=getP(); const pFrac=P.precio_m2_lote_adicional||13000; const pExc=P.precio_m2_exc||9000; const pSolo=P.precio_m2_solo||14500;
   const lA=getLote(da); const lB=getLote(db); if(!lA||!lB) return;
   const terAR=lA.terreno+terA; const terBR=lB.terreno+terB;
   $('fusion-preview').style.display='block';
   $('fusion-preview-content').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    <div style="background:#f0fdf4;border-radius:8px;padding:10px;font-size:12px"><b>Lote ${da} ampliado</b><br>
+    <div style="background:#f0fdf4;border-radius:8px;padding:10px;font-size:12px"><b>${ubicacionLote(lA)} ampliado</b><br>
       Original: ${f3(lA.terreno)}m² + Fracción A: ${f3(terA)}m²<br>
       Excedente orig (${f3(lA.excedente)}m²) × ${mxn(pExc)}/m² = ${mxn(lA.excedente*pExc)}<br>
       Fracción (${f3(terA)}m²) × ${mxn(pFrac)}/m² = ${mxn(terA*pFrac)}<br>
       <b style="color:#065f46">Nuevo total: ${f3(terAR)}m²</b></div>
-    <div style="background:#eff6ff;border-radius:8px;padding:10px;font-size:12px"><b>Lote ${db} ampliado</b><br>
+    <div style="background:#eff6ff;border-radius:8px;padding:10px;font-size:12px"><b>${ubicacionLote(lB)} ampliado</b><br>
       Original: ${f3(lB.terreno)}m² + Fracción B: ${f3(terB)}m²<br>
       Excedente orig (${f3(lB.excedente)}m²) × ${mxn(pExc)}/m² = ${mxn(lB.excedente*pExc)}<br>
       Fracción (${f3(terB)}m²) × ${mxn(pFrac)}/m² = ${mxn(terB*pFrac)}<br>
@@ -324,7 +326,7 @@ function confirmarFusion(){
   const {clave,l,terA,terB}=window._divisionPendiente;
   const lA=getLote(da); const lB=getLote(db);
   if(!lA||!lB){toast('Lote destino no encontrado','err');return;}
-  const P=getP(); const pFrac=P.precio_m2_lote_adicional||13000; const pExc=P.precio_m2_exc||9000;
+  const P=getP(); const pFrac=P.precio_m2_lote_adicional||13000; const pExc=P.precio_m2_exc||9000; const pSolo=P.precio_m2_solo||14500;
   const now=new Date().toISOString();
   // 1. Ocultar lote original como Subdividido
   inventarioService.actualizarPorClave(clave,{estado:'Subdividido',
@@ -333,7 +335,7 @@ function confirmarFusion(){
   // 2. Crecer Lote A
   {
     const nTerA=parseFloat((lA.terreno+terA).toFixed(3));
-    inventarioService.actualizarPorClave(da,{terreno:nTerA,valor_terreno:nTerA*14500+lA.plusvalia,
+    inventarioService.actualizarPorClave(da,{terreno:nTerA,valor_terreno:nTerA*pSolo+lA.plusvalia,
       fraccion_fusionada:true,fraccion_de:clave,fraccion_m2_adicional:parseFloat(terA.toFixed(3)),
       fraccion_precio_m2:pFrac,excedente_precio_m2:pExc,estado:'Lote Especial',
       historial:[...(lA.historial||[]),
@@ -342,7 +344,7 @@ function confirmarFusion(){
   // 3. Crecer Lote B
   {
     const nTerB=parseFloat((lB.terreno+terB).toFixed(3));
-    inventarioService.actualizarPorClave(db,{terreno:nTerB,valor_terreno:nTerB*14500+lB.plusvalia,
+    inventarioService.actualizarPorClave(db,{terreno:nTerB,valor_terreno:nTerB*pSolo+lB.plusvalia,
       fraccion_fusionada:true,fraccion_de:clave,fraccion_m2_adicional:parseFloat(terB.toFixed(3)),
       fraccion_precio_m2:pFrac,excedente_precio_m2:pExc,estado:'Lote Especial',
       historial:[...(lB.historial||[]),
@@ -350,7 +352,7 @@ function confirmarFusion(){
   }
   delete window._divisionPendiente;
   closeM('m-fusion'); renderInventario(); populateSelects();
-  toast(`Lote ${clave} → ${da} y ${db} crecidos como Lote Especial ✓`,'ok',5000);
+  toast(`${ubicacionLote(l)} → ${ubicacionLote(lA)} y ${ubicacionLote(lB)} crecidos como Lote Especial ✓`,'ok',5000);
 }
 function confirmarSeparacion(){
   if(!window._separacionPendiente){toast('Recarga y vuelve a intentarlo','err');return;}
@@ -362,13 +364,14 @@ function confirmarSeparacion(){
     const hermanos=DS.db.inventario.filter(x=>x.fraccion_fusionada&&x.fraccion_de===orig);
     const noDisp=hermanos.filter(x=>['Apartado','Vendido','Casa Muestra'].includes(x.estado));
     if(!lOriginal||lOriginal.estado!=='Subdividido'||noDisp.length){toast('Ya no es posible reactivar: verifica el estado de las fracciones','err');return;}
-    if(!confirm(`¿Reactivar el lote original ${orig} (${f3(lOriginal.terreno)}m²)?\n\nSe retiran las fracciones de: ${hermanos.map(h=>h.clave).join(', ')}\n(cada lote regresa a su tamaño y estado original)\ny el lote ${orig} vuelve a Disponible.`)) return;
+    if(!confirm(`¿Reactivar el lote original ${ubicacionLote(lOriginal)} (${f3(lOriginal.terreno)}m²)?\n\nSe retiran las fracciones de: ${hermanos.map(h=>ubicacionLote(h)).join(', ')}\n(cada lote regresa a su tamaño y estado original)\ny el lote ${ubicacionLote(lOriginal)} vuelve a Disponible.`)) return;
     const now=new Date().toISOString();
+    const pSolo=getP().precio_m2_solo||14500;
     // 1. Retirar la fracción de cada lote anfitrión
     hermanos.forEach(h=>{
       const fm2=h.fraccion_m2_adicional||0;
       const nT=parseFloat((h.terreno-fm2).toFixed(3));
-      inventarioService.actualizarPorClave(h.clave,{terreno:nT,valor_terreno:nT*14500+(h.plusvalia||0),
+      inventarioService.actualizarPorClave(h.clave,{terreno:nT,valor_terreno:nT*pSolo+(h.plusvalia||0),
         fraccion_fusionada:false,fraccion_de:null,fraccion_m2_adicional:0,estado:'Disponible',
         historial:[...(h.historial||[]),{estadoAnterior:h.estado,estadoNuevo:'Disponible',fecha:now,usuario:CU.id,nota:`Fracción (${f3(fm2)}m²) devuelta — lote original ${orig} reactivado`}]});
     });
@@ -377,7 +380,7 @@ function confirmarSeparacion(){
       historial:[...(lOriginal.historial||[]),{estadoAnterior:'Subdividido',estadoNuevo:'Disponible',fecha:now,usuario:CU.id,nota:`Lote reactivado — fracciones devueltas por ${hermanos.map(h=>h.clave).join(', ')}`}]});
     delete window._separacionPendiente;
     closeM('m-separar'); renderInventario(); populateSelects();
-    toast(`Lote ${orig} reactivado ✓ — fracciones devueltas`,'ok',5000);
+    toast(`${ubicacionLote(lOriginal)} reactivado ✓ — fracciones devueltas`,'ok',5000);
     return;
   }
   // ── MODO REASIGNAR (comportamiento original) ──
@@ -387,19 +390,20 @@ function confirmarSeparacion(){
   const lOrig=getLote(clave); const lDest=getLote(dest);
   if(!lOrig||!lDest){toast('Lote no encontrado','err');return;}
   const now=new Date().toISOString();
+  const pSolo=getP().precio_m2_solo||14500;
   // Quitar fracción del lote origen
   {const nT=parseFloat((lOrig.terreno-fracM2).toFixed(3));
-    inventarioService.actualizarPorClave(clave,{terreno:nT,valor_terreno:nT*14500+lOrig.plusvalia,
+    inventarioService.actualizarPorClave(clave,{terreno:nT,valor_terreno:nT*pSolo+lOrig.plusvalia,
       fraccion_fusionada:false,fraccion_de:null,fraccion_m2_adicional:0,estado:'Disponible',
       historial:[...(lOrig.historial||[]),{estadoAnterior:'Lote Especial',estadoNuevo:'Disponible',fecha:now,usuario:CU.id,nota:`Fracción (${f3(fracM2)}m²) reasignada a ${dest}`}]});}
   // Agregar fracción al lote destino
   {const nT=parseFloat((lDest.terreno+fracM2).toFixed(3));
-    inventarioService.actualizarPorClave(dest,{terreno:nT,valor_terreno:nT*14500+lDest.plusvalia,
+    inventarioService.actualizarPorClave(dest,{terreno:nT,valor_terreno:nT*pSolo+lDest.plusvalia,
       fraccion_fusionada:true,fraccion_de:lOrig.fraccion_de||clave,fraccion_m2_adicional:fracM2,fraccion_precio_m2:pFrac,excedente_precio_m2:pExc,estado:'Lote Especial',
       historial:[...(lDest.historial||[]),{estadoAnterior:lDest.estado,estadoNuevo:'Lote Especial',fecha:now,usuario:CU.id,nota:`Fracción (${f3(fracM2)}m²) de ${clave}`}]});}
   delete window._separacionPendiente;
   closeM('m-separar'); renderInventario(); populateSelects();
-  toast(`Fracción separada de ${clave} → fusionada con ${dest} ✓`,'ok',4000);
+  toast(`Fracción separada de ${ubicacionLote(lOrig)} → fusionada con ${ubicacionLote(lDest)} ✓`,'ok',4000);
 }
 function saveLote(){
   // ── MOTOR: inventario protegido — una vivienda con venta o apartado activo NO se modifica ──
@@ -420,7 +424,7 @@ function saveLote(){
   let estFinal=est;
   if(modeloAsg&&['Disponible','Lote Especial'].includes(est)) estFinal='Entrega Rápida';
   const P=getP();
-  const valor_terreno=ter*14500+plus; // full precision, no premature round
+  const valor_terreno=ter*(P.precio_m2_solo||14500)+plus; // full precision, no premature round
   const clave=$('le-id').value;
   const histEntry={estadoAnterior:clave?getLote(clave)?.estado:'',estadoNuevo:estFinal,fecha:new Date().toISOString(),usuario:CU.id,nota:''};
   if(clave){
@@ -433,11 +437,10 @@ function saveLote(){
     IANNA_MOTOR.auditar('inventario', claveEdit||('nuevo'), claveEdit?'EDITAR_LOTE':'CREAR_LOTE', {}, {mz:$('le-mz').value, lote:$('le-lote').value, estado:$('le-est').value}, claveEdit?'Edición de lote (sin operación activa)':'Alta de lote');
   toast('Lote actualizado ✓','ok');
   } else {
-    const loteEsNumero=/^\d+$/.test(String(loteNum));
-    const nuevaClave=String(mz)+(loteEsNumero?String(loteNum).padStart(2,'0'):String(loteNum));
-    if(DS.db.inventario.some(x=>x.clave===nuevaClave)){ toast(`Ya existe un lote con clave ${nuevaClave}`,'err'); return; }
-    inventarioService.crear({clave:nuevaClave,mz,lote:loteNum,estado:estFinal,terreno:parseFloat(ter.toFixed(3)),excedente:parseFloat(exc.toFixed(3)),precio_m2:9000,plusvalia:plus,valor_terreno,tipo,modelo_asignado:modeloAsg,cliente_asignado:clienteAsg,fecha_operacion:fechaOp,dir_oficial:$('le-dir-oficial').value.trim(),historial:[histEntry]});
-    IANNA_MOTOR.auditar('inventario', $('le-mz').value+''+$('le-lote').value, 'CREAR_LOTE', {}, {mz:$('le-mz').value, lote:$('le-lote').value, estado:$('le-est').value}, 'Alta de lote');
+    const claveFisica=IANNA_IDS.claveFisica({mz,lote:loteNum});
+    if(DS.db.inventario.some(x=>x.clave_fisica===claveFisica)){ toast(`Ya existe la ubicación ${claveFisica}`,'err'); return; }
+    const creado=inventarioService.crear({mz,lote:loteNum,estado:estFinal,terreno:parseFloat(ter.toFixed(3)),excedente:parseFloat(exc.toFixed(3)),precio_m2:P.precio_m2_exc||9000,plusvalia:plus,valor_terreno,tipo,modelo_asignado:modeloAsg,cliente_asignado:clienteAsg,fecha_operacion:fechaOp,dir_oficial:$('le-dir-oficial').value.trim(),historial:[histEntry]});
+    IANNA_MOTOR.auditar('inventario', creado.id_publico, 'CREAR_LOTE', {}, {id_publico:creado.id_publico,clave_fisica:creado.clave_fisica,mz,lote:loteNum,estado:estFinal}, 'Alta de lote');
     toast('Lote creado ✓','ok');
   }
   closeM('m-lote-edit'); renderInventario(); populateSelects();

@@ -53,7 +53,11 @@ window.inventarioService = {
     DS._save(DS.db);
     return DS.db.inventario[i];
   },
-  crear: (lote) => { DS.db.inventario.push(lote); DS._save(DS.db); return lote; },
+  crear: (lote) => {
+    const idPublico=lote.id_publico||IANNA_IDS.asignar('lote');
+    const registro={...lote,id_publico:idPublico,clave:lote.clave||idPublico,clave_fisica:lote.clave_fisica||IANNA_IDS.claveFisica(lote),historial:lote.historial||[]};
+    DS.db.inventario.push(registro); DS._save(DS.db); return registro;
+  },
   eliminarPorClave: (clave) => { DS.db.inventario = DS.db.inventario.filter(l => l.clave !== String(clave)); DS._save(DS.db); },
 };
 

@@ -15,6 +15,7 @@ const DOC_LABELS = {
   imprimirCaratula:'Carátula del Contrato',
   imprimirContrato:'Contrato de Compraventa',
   imprimirPagares:'Pagarés',
+  imprimirReciboPagoAdicional:'Recibo de Pago Adicional',
 };
 
 // Snapshot serializable de _cierreData (congela los datos al momento de generar)
@@ -32,7 +33,10 @@ function construirSnapshotCierre(){
     vTotalVivienda:cd.vTotalVivienda, vConstrAdic:cd.vConstrAdic, constrAdicDesc:cd.constrAdicDesc, constrAdicM2:cd.constrAdicM2,
     vLoteAdic:cd.vLoteAdic, loteAdicData:cd.loteAdicData?{...cd.loteAdicData, historial:undefined}:null,
     gastosCalc:cd.gastosCalc, vGastos:cd.vGastos, vTotalOp:cd.vTotalOp,
-    apartado:cd.apartado, credito:cd.credito, descuento:cd.descuento, pagoAdic:cd.pagoAdic,
+    financial_snapshot:cd.financialSnapshot||null,
+    apartado:cd.apartado, credito:cd.credito, creditoPct:cd.creditoPct, institucion:cd.institucion||null,
+    componentePublicoMonto:cd.componentePublicoMonto||0, complementoBancario:cd.complementoBancario||0,
+    descuento:cd.descuento, pagoAdic:cd.pagoAdic,
     vDesembolso:cd.vDesembolso, plazo:cd.plazo,
     pagares:(cd.pagares||[]).map(p=>({n:p.n, fecha:(p.fecha instanceof Date?p.fecha.toISOString():p.fecha), monto:p.monto})),
     fechaSnapshot:new Date().toISOString(),
@@ -61,8 +65,10 @@ function abrirDocumentoGuardado(apId, fn, pagoId){
     folio:s.folio, numCliente:s.numCliente, cliSnapshot:s.cli, asesorNombre:s.asesorNombre, formaPago:s.formaPago,
     vTotalVivienda:s.vTotalVivienda, vConstrAdic:s.vConstrAdic, constrAdicDesc:s.constrAdicDesc, constrAdicM2:s.constrAdicM2,
     vLoteAdic:s.vLoteAdic, loteAdicData:s.loteAdicData,
-    gastosCalc:s.gastosCalc, vGastos:s.vGastos, vTotalOp:s.vTotalOp,
-    apartado:s.apartado, credito:s.credito, descuento:s.descuento, pagoAdic:s.pagoAdic,
+    gastosCalc:s.gastosCalc, vGastos:s.vGastos, vTotalOp:s.vTotalOp, financialSnapshot:s.financial_snapshot||null,
+    apartado:s.apartado, credito:s.credito, creditoPct:s.creditoPct||0, institucion:s.institucion||null,
+    componentePublicoMonto:s.componentePublicoMonto||0, complementoBancario:s.complementoBancario||0,
+    descuento:s.descuento, pagoAdic:s.pagoAdic,
     vDesembolso:s.vDesembolso, plazo:s.plazo,
     pagares:(s.pagares||[]).map(p=>({...p, fecha:new Date(p.fecha)})),
   };

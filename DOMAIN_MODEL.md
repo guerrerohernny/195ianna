@@ -179,11 +179,11 @@ La desarrolladora. Ejemplo: "Desarrolladora PALIZ, S.A. de C.V.". Preparada desd
 
 **Dominio propietario:** Administración.
 
-### Lote (`LOT-nnnnnn`, clave física `M###-L###`)
+### Lote (`LOT-nnnnnn`, clave física `M####-L####`)
 
 Una vivienda o terreno físico dentro de un Proyecto.
 
-**Campos clave:** `id_publico`, `clave` (operativa), `clave_fisica` (`M006-L007`), `mz`, `lote`, `estado` (Disponible, Apartado, Vendido, Casa Muestra, Lote Especial, Subdividido), `modelo_asignado`, `precio_terreno`, `superficie` (con 3 decimales de precisión), `excedente`, `plusvalia`.
+**Campos clave:** `id_publico`, `clave` (operativa), `clave_fisica` (`M0006-L0007`), `mz`, `lote`, `estado` (Disponible, Apartado, Vendido, Casa Muestra, Lote Especial, Subdividido), `modelo_asignado`, `precio_terreno`, `superficie` (con 3 decimales de precisión), `excedente`, `plusvalia`.
 
 **Reglas:** un Lote con Operación activa no se edita ni elimina. La superficie siempre se expresa con 3 decimales — reducirla a 2 decimales distorsiona el valor por m². Un Lote Vendido o Disponible con historial de Operaciones no se elimina; solo se marcan Inactivo o pasan por operación de rescisión.
 
@@ -275,7 +275,7 @@ El asesor Ana crea al Prospecto **PRO-000018 "Juan Pérez"**. Ana registra sus d
 Como Juan mostró interés en Valle de Aragón, Ana genera la Oportunidad **OPO-000047** vinculando la Persona con el Proyecto. Registra seguimientos, agenda una cita, envía WhatsApp — todo queda anclado a esta Oportunidad. Estado en el pipeline: *Nueva → Contactada → Cita agendada → Visitó desarrollo*. La tarjeta se mueve en el kanban; el Motor de Operaciones sincroniza la ficha.
 
 **3. Cotización (Comercial):**
-Juan se decide por el lote **LOT-000107 (M006-L012)**, modelo Ambel. Ana cotiza (Motor Financiero calcula la corrida, Motor de Formatos muestra `$1,850,000.00` y `144.000 m²`). La cotización queda en el expediente comercial de la Oportunidad. Estado: *Cotización enviada → Negociando*.
+Juan se decide por el lote **LOT-000107 (M0006-L0012)**, modelo Ambel. Ana cotiza (Motor Financiero calcula la corrida, Motor de Formatos muestra `$1,850,000.00` y `144.000 m²`). La cotización queda en el expediente comercial de la Oportunidad. Estado: *Cotización enviada → Negociando*.
 
 **4. Apartado (Ganada) (Comercial + Financiero):**
 Motor de Operaciones ejecuta la operación `crear_apartado` (transición Disponible → Apartado). Se genera **APT-000041** y se cierra la Oportunidad **OPO-000047** como **Ganada**, dejando el vínculo `operacionId = APT-000041` para reconstrucción histórica. Motor Financiero registra un movimiento `MOV-000203 · ingreso · $80,000 · efectivo` con folio de recibo `REC-000301`. Auditoría automática. Ana recibe recibo automático con `EFECTIVO` como forma de pago. El Health Check del sistema no reporta anomalías.

@@ -6,10 +6,12 @@
    ════════════════════════════════════════════════════════════════ */
 
 // Migración inicial de identificadores permanentes (Fase 1.8) — corre una sola vez.
-try{ if(typeof IANNA_IDS!=='undefined') IANNA_IDS.migrar(); }catch(e){ console.error('Migración IDs',e); }
+try{ DS.aplicarBootstrapLimpio196(); }catch(e){ console.error('Bootstrap limpio 1.96',e); }
+try{ if(typeof IANNA_IDS!=='undefined'){ IANNA_IDS.migrar(); if(IANNA_IDS.migrar196) IANNA_IDS.migrar196(); } }catch(e){ console.error('Migración IDs',e); }
 // ── Fase 1.95: puerta única de datos y ledger como única fuente de saldo ──
 try{ DS.migrarLlavesLegadas(); }catch(e){ console.error('Migración llaves',e); }
 try{ if(typeof IANNA_FIN!=='undefined') IANNA_FIN.reconciliarHistorico(); }catch(e){ console.error('Reconciliación ledger',e); }
+try{ if(typeof IANNA_MIG_196!=='undefined') IANNA_MIG_196.run(); }catch(e){ console.error('Migración 1.96',e); }
 
 // ── BIND LOGIN EVENTS (safe: all functions already defined above) ──
 document.addEventListener('DOMContentLoaded', function() {

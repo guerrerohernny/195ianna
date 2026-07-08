@@ -26,7 +26,9 @@ async function descargarCierreZIP(){
 
   calcCierre();
   const snap = construirSnapshotCierre();
-  apartadosService.actualizar(_cierreData.ap.id,{ doc_snapshot: snap, folio_recibo: IANNA_MOTOR.asegurarFolioCierre(), cierre_generado: true });
+  const pagoAdic=(typeof registrarPagoAdicionalCierre==='function')?registrarPagoAdicionalCierre():null;
+  apartadosService.actualizar(_cierreData.ap.id,{ doc_snapshot: snap, financial_snapshot:_cierreData.financialSnapshot||null, recibo_pago_adicional:pagoAdic?.folio||null, folio_recibo: IANNA_MOTOR.asegurarFolioCierre(), cierre_generado: true });
+  if(pagoAdic?.folio) registrarDocumento(_cierreData.ap.id,'imprimirReciboPagoAdicional','Recibo de Pago Adicional');
   _cierreData.ap.cierre_generado = true;
   // Registrar todos los documentos del expediente
   Object.keys(DOC_LABELS).forEach(fn=>{
@@ -53,7 +55,11 @@ function getClienteData(){
   }
   return {
     // ── Financieros (tab 2) — se guardan y restauran junto con los datos del cliente ──
+    fin_institucion_id: $('c-institucion')?.value||'contado',
+    fin_credito_pct: $('c-credito-pct')?.value||'0',
     fin_credito: $('c-credito')?.value||'',
+    fin_componente_publico_monto: $('c-publico-monto')?.value||'',
+    fin_gastos_operacion: (typeof _cierreGastos!=='undefined') ? JSON.parse(JSON.stringify(_cierreGastos)) : [],
     fin_descuento: $('c-descuento')?.value||'',
     fin_pago_adic: $('c-pago-adic')?.value||'',
     fin_plazo: $('c-plazo')?.value||'',
@@ -210,7 +216,7 @@ function imprimirFormatoApartado(){
       <div style="font-size:12px"><b>FECHA:</b> ${hoy} &nbsp;&nbsp; <b>NOMBRE DEL CLIENTE:</b> ${cli.nombre}</div></td>
   </tr></table>
   <table style="margin-bottom:8px"><tr><th>LOTE</th><th>MANZANA</th><th>LOTE</th><th>MODELO</th><th>PROTOTIPO (M2 ED)</th><th>M2 SUPERFICIE</th><th>DIRECCIÓN OFICIAL</th></tr>
-  <tr><td>${l.clave}</td><td>${l.mz}</td><td>${l.lote}</td><td>${m.nombre}</td><td>${m.construccion||'—'}m²</td><td>${f3(l.terreno)}</td><td>${l.dir_oficial||'—'}</td></tr></table>
+  <tr><td>${ubicacionLote(l)}</td><td>${l.mz}</td><td>${l.lote}</td><td>${m.nombre}</td><td>${m.construccion||'—'}m²</td><td>${f3(l.terreno)}</td><td>${l.dir_oficial||'—'}</td></tr></table>
   <table style="margin-bottom:8px"><tr>
     <th>PRECIO VIVIENDA</th><th>PRECIO EXCEDENTE</th><th>PLUSVALÍA</th>${fracM2>0?'<th>FRACCIÓN</th>':''}<th>DESCUENTO</th><th>PRECIO TOTAL</th>
   </tr><tr>
@@ -224,7 +230,7 @@ function imprimirFormatoApartado(){
     ${fracM2>0?`<tr><td>Fracción Fusionada (${f3(fracM2)}m²)</td><td style="text-align:right">$${mxn(vFrac).replace('$','')}</td></tr>`:''}
     ${vPlus>0?`<tr><td>Plusvalía — ${l.tipo}</td><td style="text-align:right">$${mxn(vPlus).replace('$','')}</td></tr>`:''}
     ${vConstrAdic>0?`<tr><td>Construcción Adicional${constrAdicDesc?' — '+constrAdicDesc:''}</td><td style="text-align:right">$${mxn(vConstrAdic).replace('$','')}</td></tr>`:''}
-    ${vLoteAdic>0?`<tr><td>Lote Adicional ${loteAdicData?loteAdicData.clave:''}</td><td style="text-align:right">$${mxn(vLoteAdic).replace('$','')}</td></tr>`:''}
+    ${vLoteAdic>0?`<tr><td>Lote Adicional ${loteAdicData?ubicacionLote(loteAdicData):''}</td><td style="text-align:right">$${mxn(vLoteAdic).replace('$','')}</td></tr>`:''}
     <tr class="sub-total"><td>VALOR TOTAL DE LA VIVIENDA</td><td style="text-align:right">$${mxn(vTotalVivienda).replace('$','')}</td></tr>
     ${(gastosCalc||[]).map(g=>`<tr><td>${g.nombre}</td><td style="text-align:right">$${mxn(g.monto).replace('$','')}</td></tr>`).join('')}
     <tr class="sub-total"><td>TOTAL GASTOS DE OPERACIÓN</td><td style="text-align:right">$${mxn(vGastos).replace('$','')}</td></tr>
@@ -440,7 +446,7 @@ function imprimirCaratula(){
   <table style="margin-bottom:8px">
     <tr><td class="hdr" colspan="4">4. DATOS DE LA UNIDAD PRIVATIVA</td></tr>
     <tr><td><b>Desarrollo</b></td><td>Valle de Aragón</td><td><b>Manzana</b></td><td>${l.mz}</td></tr>
-    <tr><td><b>Lote</b></td><td>${l.lote}</td><td><b>Clave</b></td><td>${l.clave}</td></tr>
+    <tr><td><b>Lote</b></td><td>${l.lote}</td><td><b>Clave</b></td><td>${ubicacionLote(l)}</td></tr>
     <tr><td><b>Modelo</b></td><td>${m.nombre}</td><td><b>Construcción m²</b></td><td>${m.construccion||'—'}</td></tr>
     <tr><td><b>Superficie (m²)</b></td><td>${f3(l.terreno)}</td><td><b>Excedente (m²)</b></td><td>${f3(l.excedente)}</td></tr>
     <tr><td><b>Dirección oficial</b></td><td colspan="3">${l.dir_oficial||'—'}</td></tr>
@@ -700,7 +706,7 @@ function imprimirPagares(){
         <div style="text-align:right"><div style="font-size:10px;color:#666">${esPreview?'Vista previa':'Folio del pagaré'}</div><div style="font-weight:700;color:#C9963C">${esPreview?'SIN FOLIO':IANNA_FMT.FOLIO(p.folio)}</div>${(!esPreview&&p.id_publico)?`<div style="font-size:9px;color:#999">${p.id_publico}</div>`:''}</div>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:11.5px">
-        <tr><td style="padding:4px;width:50%;border-bottom:1px solid #eee"><b>Lote:</b> ${l.clave} — Mz ${l.mz} Lote ${l.lote}</td><td style="padding:4px;border-bottom:1px solid #eee"><b>Modelo:</b> ${m.nombre}</td></tr>
+        <tr><td style="padding:4px;width:50%;border-bottom:1px solid #eee"><b>Lote:</b> ${ubicacionLote(l)}</td><td style="padding:4px;border-bottom:1px solid #eee"><b>Modelo:</b> ${m.nombre}</td></tr>
         <tr><td style="padding:4px;border-bottom:1px solid #eee"><b>Cliente:</b> ${cli.nombre}</td><td style="padding:4px;border-bottom:1px solid #eee"><b>Fecha de pago:</b> ${_fmtFechaPag(p.fecha)}</td></tr>
       </table>
       <div style="text-align:center;margin:14px 0;padding:12px;background:#f0fdf4;border-radius:6px">

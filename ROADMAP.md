@@ -167,3 +167,24 @@ nuevas: una sola vía para cada responsabilidad.
 - **Business Intelligence** con dashboards ejecutivos por empresa y benchmarking anónimo entre desarrolladoras.
 
 Cada nueva fase debe justificarse contra los principios permanentes. Si una funcionalidad no puede respetarlos, se rediseña.
+
+---
+
+## Fase 1.96 — Business Rules & UX Hardening *(implementada; pendiente validación E2E visual en staging)*
+
+**Objetivo:** cerrar las reglas comerciales y financieras del producto antes de Multiempresa.
+
+Entregables principales:
+- identidad oficial `CLI-` y ubicación física `M0000-L0000`;
+- composición comercial única mediante `IANNA_VALOR`;
+- base comisionable configurable, descuento, regla especial Contado y distribución dinámica N-partes;
+- Solo Terreno con precio dinámico por m²;
+- crédito `% ⇄ monto` sobre Valor Total de la Vivienda antes de gastos y descuento;
+- catálogo de instituciones financieras con financiamiento tradicional, mixto y Contado;
+- COFINAVIT, FOVISSSTE PARA TODOS, Crédito IMSS y Contado;
+- gastos de operación editables por operación y snapshot histórico;
+- pago adicional como movimiento financiero + recibo, con correcciones compensatorias;
+- protección para eliminar/archivar Personas;
+- hardening del Modal de Operaciones y totales financieros.
+
+**Verificación reproducible:** 54 pruebas automatizadas verdes, 9 guardas arquitectónicas verdes y sintaxis JavaScript limpia. La validación E2E visual en navegador queda como gate de staging antes de abrir Fase 2.

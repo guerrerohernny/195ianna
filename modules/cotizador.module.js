@@ -25,14 +25,14 @@ function onCotMzChange(){
     if(mz&&String(l.mz)!==mz) return false;
     return ['Disponible','Entrega Rápida','Lote Especial'].includes(l.estado_display||l.estado);
   });
-  if($('cot-lote')) $('cot-lote').innerHTML='<option value="">—</option>'+lotesDisponibles.map(l=>`<option value="${l.clave}">${l.clave} — Mz${l.mz} Lt${l.lote} (${f3(l.terreno)}m²)</option>`).join('');
+  if($('cot-lote')) $('cot-lote').innerHTML='<option value="">—</option>'+lotesDisponibles.map(l=>`<option value="${l.clave}">${ubicacionLote(l)} (${f3(l.terreno)}m²)</option>`).join('');
   $('cot-lote-info').style.display='none';
   onCotModeloMzFilter();
   if(typeof calcCotizador==='function') calcCotizador();
 }
 function onCotModeloMzFilter(){
   const mz=$('cot-mz')?.value||'';
-  const mods=DS.getModelos().filter(m=>m.activo&&m.id!=='SOLO_TERRENO');
+  const mods=DS.getModelos().filter(m=>m.activo);
   if(!$('cot-modelo')) return;
   $('cot-modelo').innerHTML='<option value="">— Selecciona —</option>'+mods.map(m=>{
     const blocked=m.id==='MORELLO'&&mz&&mz!=='10';
@@ -46,7 +46,7 @@ function onCotLoteChange(){
   // Si el lote tiene manzana diferente al filtro, ajustar filtro de modelo
   if($('cot-mz') && String(l.mz)!==$('cot-mz').value){ $('cot-mz').value=String(l.mz); onCotModeloMzFilter(); }
   $('cot-lote-info').style.display='block';
-  $('cot-lote-info').innerHTML=`<b>${l.clave}</b> — Mz ${l.mz} Lote ${l.lote} · Terreno ${f3(l.terreno)}m² · Excedente ${f3(l.excedente)}m²${l.fraccion_fusionada?' · <span style="color:#7c3aed">Fracción fusionada '+f3(l.fraccion_m2_adicional||0)+'m²</span>':''}${l.plusvalia?' · Plusvalía '+mxn(l.plusvalia):''}`;
+  $('cot-lote-info').innerHTML=`<b>${ubicacionLote(l)}</b> · Terreno ${f3(l.terreno)}m² · Excedente ${f3(l.excedente)}m²${l.fraccion_fusionada?' · <span style="color:#7c3aed">Fracción fusionada '+f3(l.fraccion_m2_adicional||0)+'m²</span>':''}${l.plusvalia?' · Plusvalía '+mxn(l.plusvalia):''}`;
   if(typeof calcCotizador==='function') calcCotizador();
 }
 function onCotModeloChange(){
@@ -211,13 +211,13 @@ function imprimirCotizacion(){
     ...(c.vExcConstr>0?[['Construcción excedente',c.vExcConstr]]:[]),
     ...(c.vPlus>0?[['Plusvalía',c.vPlus]]:[]),
   ];
-  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Cotización ${c.l.clave}</title>
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Cotización ${ubicacionLote(c.l)}</title>
   <style>body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#1a1a1a}
   table{width:100%;border-collapse:collapse;margin-bottom:10px}td,th{padding:6px 10px;border-bottom:1px solid #eee}
   .tot{background:#1E3D0F;color:#fff;font-weight:700}.gold{background:#C9963C;color:#fff;font-weight:700}
   @media print{button{display:none!important}@page{size:letter;margin:10mm}}</style></head><body>
   <h2 style="color:#1E3D0F">Cotización — Valle de Aragón</h2>
-  <p><b>Cliente:</b> ${nombreCliente} &nbsp; <b>Lote:</b> ${c.l.clave} &nbsp; <b>Modelo:</b> ${c.m.nombre}</p>
+  <p><b>Cliente:</b> ${nombreCliente} &nbsp; <b>Lote:</b> ${ubicacionLote(c.l)} &nbsp; <b>Modelo:</b> ${c.m.nombre}</p>
   <table>${filas.map(f=>`<tr><td>${f[0]}</td><td style="text-align:right">${mxn(f[1])}</td></tr>`).join('')}
   <tr class="tot"><td>VALOR TOTAL VIVIENDA</td><td style="text-align:right">${mxn(c.vTotalVivienda)}</td></tr>
   ${c.gastosCalc.map(g=>`<tr><td>${g.nombre}</td><td style="text-align:right">${mxn(g.monto)}</td></tr>`).join('')}
