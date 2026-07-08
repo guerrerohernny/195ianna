@@ -162,6 +162,7 @@
         <div style="display:flex;gap:8px">
           <button class="btn btn-navy btn-sm" onclick="setInvView('grid')" id="iv-grid">⊞ Plano</button>
           <button class="btn btn-out btn-sm" onclick="setInvView('tabla')" id="iv-tabla">≡ Tabla</button>
+          <button class="btn btn-out btn-sm nav-admin" onclick="openInventarioImportModal()">⬆ Importar inventario</button>
           <button class="btn btn-gold btn-sm nav-admin" onclick="openLoteModal()">+ Nuevo Lote</button>
         </div>
       </div>
@@ -1150,6 +1151,28 @@
   <div class="mfoot">
     <button class="btn btn-out" onclick="closeM('m-import')">Cerrar</button>
     <button class="btn btn-gold" id="imp-do-btn" style="display:none" onclick="doImport()">✅ Importar registros</button>
+  </div>
+</div></div>
+
+<!-- INVENTARIO IMPORT MODAL — FASE 1.96 -->
+<div class="mbd" id="m-import-inventario"><div class="modal" style="max-width:980px">
+  <div class="mhdr"><div class="m-title">Importar inventario maestro</div><div class="mx" onclick="closeM('m-import-inventario')">✕</div></div>
+  <div class="mbody">
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;font-size:12.5px;color:#1e40af;margin-bottom:16px">
+      Descarga la plantilla oficial, completa los lotes y vuelve a cargarla. IANNA valida cada fila y genera automáticamente el ID <b>LOT-</b> y la clave física <b>M0000-L0000</b>.
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-out btn-sm" onclick="downloadInventarioTemplate()">⬇ Descargar plantilla</button>
+      <button class="btn btn-navy btn-sm" onclick="document.getElementById('inv-imp-file').click()">📂 Seleccionar archivo</button>
+      <input type="file" id="inv-imp-file" style="display:none" accept=".xlsx,.xls,.csv" onchange="loadInventarioImportFile(this)">
+      <span style="font-size:12px;color:var(--t3)">Formatos: .xlsx, .xls, .csv</span>
+    </div>
+    <div id="inv-imp-summary"></div>
+    <div id="inv-imp-preview"><div class="empty"><div class="empty-i">📋</div><p>Carga la plantilla para validar el inventario antes de importarlo.</p></div></div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-out" onclick="closeM('m-import-inventario')">Cerrar</button>
+    <button class="btn btn-gold" id="inv-imp-do" style="display:none" onclick="importarInventarioValidado()">✅ Importar inventario</button>
   </div>
 </div></div>
 
