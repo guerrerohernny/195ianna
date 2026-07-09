@@ -58,6 +58,12 @@ window.IANNA_COM = (function(){
         contado: { id:'DCO-CONTADO', nombre:'Contado', tipo:'contado', partes:[ { parte:'firma', nombre:'Firma', evento:'contrato_firmado', pct:0.5 }, { parte:'escritura', nombre:'Escritura', evento:'escrituracion', pct:0.5 } ] },
         especiales: []
       },
+      esquemas_comision: [
+        {id:'EC-CRED-DIR',nombre:'Crédito hipotecario — Venta directa',modalidad:'credito',canal:'directo',porcentajes:{asesor:0.02,gerente:0.005,broker:0},partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:0.5},{parte:'escritura',nombre:'Escritura',evento:'escrituracion',pct:0.5}]},
+        {id:'EC-CRED-BRK',nombre:'Crédito hipotecario — Broker',modalidad:'credito',canal:'broker',porcentajes:{asesor:0.01,gerente:0.005,broker:0.02},partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:0.5},{parte:'escritura',nombre:'Escritura',evento:'escrituracion',pct:0.5}]},
+        {id:'EC-CONT-DIR',nombre:'Contado — Venta directa',modalidad:'contado',canal:'directo',porcentajes:{asesor:0.025,gerente:0.005,broker:0},partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:0.5},{parte:'escritura',nombre:'Escritura',evento:'escrituracion',pct:0.5}]},
+        {id:'EC-CONT-BRK',nombre:'Contado — Broker',modalidad:'contado',canal:'broker',porcentajes:{asesor:0.01,gerente:0.005,broker:0.02},partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:0.5},{parte:'escritura',nombre:'Escritura',evento:'escrituracion',pct:0.5}]}
+      ],
       distribucion_asesor:  [ { parte:'firma', nombre:'Firma de contrato', evento:'contrato_firmado', pct:0.5 }, { parte:'escrituracion', nombre:'Escrituración', evento:'escrituracion', pct:0.5 } ],
       distribucion_gerente: [ { parte:'firma', nombre:'Firma de contrato', evento:'contrato_firmado', pct:0.5 }, { parte:'escrituracion', nombre:'Escrituración', evento:'escrituracion', pct:0.5 } ],
       reglas_especiales: { contado: { activa:false, porcentaje_asesor:0.025 } },
@@ -213,29 +219,54 @@ window.IANNA_COM = (function(){
     return {id:'LEGACY',nombre:'Distribución vigente',tipo:'legacy',partes:p.distribucion_asesor||[]};
   }
 
+  function canalOperacion(ap){
+    const o=ap?.oportunidadId&&typeof IANNA_OPO!=='undefined'?IANNA_OPO.porId(ap.oportunidadId):null;
+    const brokerId=ap?.broker_id||o?.broker_id||null;
+    const origen=String(o?.origen||ap?.fuente||'').toLowerCase();
+    return (brokerId||origen==='broker')?'broker':'directo';
+  }
+  function modalidadOperacion(ap){
+    const t=String(ap?.financial_snapshot?.tipo_financiamiento||ap?.datos_cierre?.tipoCredito||'credito').toLowerCase();
+    return t==='contado'?'contado':t;
+  }
+  function resolverEsquema(ap,politica){
+    const p=politica||politicaActual(); const id=ap?.financial_snapshot?.esquema_comision_id||ap?.datos_cierre?.esquema_comision_id||'';
+    const arr=p.esquemas_comision||[]; if(id){const f=arr.find(x=>x.id===id);if(f)return f;}
+    const mod=modalidadOperacion(ap), canal=canalOperacion(ap);
+    return arr.find(x=>x.modalidad===mod&&x.canal===canal)||arr.find(x=>x.modalidad===mod&&x.canal==='cualquiera')||null;
+  }
+  function comisionBeneficiario(ap,rol){
+    const politica=ap.politica_snapshot||politicaActual(); const {base,politica_version}=baseComisionable(ap); const esquema=resolverEsquema(ap,politica);
+    let pct=0, partes=[];
+    if(esquema){pct=Number(esquema.porcentajes?.[rol]||0);partes=esquema.partes||[];}
+    else if(rol==='asesor') return null;
+    else if(rol==='gerente'){pct=Number(politica.porcentajes?.gerente||0);partes=politica.distribucion_gerente||[];}
+    else if(rol==='broker'){pct=Number(politica.porcentajes?.broker||0);partes=resolverDistribucion(ap,politica).partes||[];}
+    const total=base*pct;
+    return {rol,base,porcentaje:pct,total,partes:partes.map(p=>({parte:p.parte,nombre:p.nombre||p.parte,evento:p.evento||p.parte,pct:Number(p.pct||0),monto:total*Number(p.pct||0)})),politica_version,esquema_id:esquema?.id||null,esquema_nombre:esquema?.nombre||null,canal:canalOperacion(ap),modalidad:modalidadOperacion(ap),es_broker:canalOperacion(ap)==='broker'};
+  }
+
   // Comisión completa del asesor. Devuelve el desglose por partes de la distribución.
   function comisionAsesor(ap){
-    const politica = ap.politica_snapshot || politicaActual();
-    const { base, politica_version } = baseComisionable(ap);
-    const esBroker = !!ap.broker_id;
-    const tipoFin=String(ap?.financial_snapshot?.tipo_financiamiento||ap?.datos_cierre?.tipoCredito||'').toLowerCase();
-    const reglaContado=politica.reglas_especiales?.contado;
-    const pct = (!esBroker && tipoFin==='contado' && reglaContado?.activa) ? Number(reglaContado.porcentaje_asesor||0) : (esBroker ? politica.porcentajes.asesor_broker : politica.porcentajes.asesor_directo);
-    const total = base * pct;
-    const dist=resolverDistribucion(ap,politica);
-    const partes = (dist.partes||politica.distribucion_asesor||[]).map(p => ({ parte:p.parte, nombre:p.nombre||p.parte, evento:p.evento||p.parte, pct:Number(p.pct||0), monto: total*Number(p.pct||0) }));
-    return { rol:'asesor', beneficiario_id: ap.asesor, base, porcentaje:pct, total, partes, politica_version, es_broker:esBroker, regla_especial_aplicada:(!esBroker&&tipoFin==='contado'&&reglaContado?.activa)?'contado':null };
+    const politica=ap.politica_snapshot||politicaActual(); const esBroker=canalOperacion(ap)==='broker'; const tipoFin=modalidadOperacion(ap); const reglaContado=politica.reglas_especiales?.contado;
+    const v2=comisionBeneficiario(ap,'asesor');
+    if(v2){
+      if(!esBroker&&tipoFin==='contado'&&reglaContado?.activa){ v2.porcentaje=Number(reglaContado.porcentaje_asesor||0); v2.total=v2.base*v2.porcentaje; v2.regla_especial_aplicada='contado'; }
+      // Compatibilidad de snapshots 1.96/1.97: una distribución asesor congelada explícitamente manda si el cierre aún no seleccionó esquema v2.
+      if(ap.politica_snapshot && !ap?.financial_snapshot?.esquema_comision_id && Array.isArray(politica.distribucion_asesor) && politica.distribucion_asesor.length){
+        v2.partes=politica.distribucion_asesor.map(p=>({parte:p.parte,nombre:p.nombre||p.parte,evento:p.evento||p.parte,pct:Number(p.pct||0),monto:v2.total*Number(p.pct||0)}));
+      }else{
+        v2.partes=(v2.partes||[]).map(p=>({...p,monto:v2.total*Number(p.pct||0)}));
+      }
+      return v2;
+    }
+    const {base,politica_version}=baseComisionable(ap); const pct=(!esBroker&&tipoFin==='contado'&&reglaContado?.activa)?Number(reglaContado.porcentaje_asesor||0):(esBroker?politica.porcentajes.asesor_broker:politica.porcentajes.asesor_directo); const total=base*pct; const dist=resolverDistribucion(ap,politica);
+    return {rol:'asesor',beneficiario_id:ap.asesor,base,porcentaje:pct,total,partes:(dist.partes||[]).map(p=>({parte:p.parte,nombre:p.nombre||p.parte,evento:p.evento||p.parte,pct:Number(p.pct||0),monto:total*Number(p.pct||0)})),politica_version,es_broker:esBroker,regla_especial_aplicada:(!esBroker&&tipoFin==='contado'&&reglaContado?.activa)?'contado':null};
   }
 
   // Comisión del gerente sobre esta operación.
-  function comisionGerente(ap){
-    const politica = ap.politica_snapshot || politicaActual();
-    const { base, politica_version } = baseComisionable(ap);
-    const pct = politica.porcentajes.gerente;
-    const total = base * pct;
-    const partes = politica.distribucion_gerente.map(p => ({ parte:p.parte, pct:p.pct, monto: total*p.pct }));
-    return { rol:'gerente', base, porcentaje:pct, total, partes, politica_version };
-  }
+  function comisionGerente(ap){ return comisionBeneficiario(ap,'gerente'); }
+  function comisionBroker(ap){ return canalOperacion(ap)==='broker'?comisionBeneficiario(ap,'broker'):{rol:'broker',base:0,porcentaje:0,total:0,partes:[],es_broker:false}; }
 
   // Registra las comisiones devengadas en el ledger financiero (una entrada por parte).
   // Se llama automáticamente al ejecutar la operación "contrato_firmado".
@@ -244,6 +275,7 @@ window.IANNA_COM = (function(){
     const politica_version = (ap.politica_snapshot||{}).version || politicaActual().version;
     const asesor = comisionAsesor(ap);
     const gerente = comisionGerente(ap);
+    const broker = comisionBroker(ap);
     asesor.partes.forEach(p => {
       IANNA_FIN.registrarMovimiento({
         tipo:'comision_asesor', operacionId: ap.id, personaId: ap.prospectoId,
@@ -260,7 +292,8 @@ window.IANNA_COM = (function(){
         motivo:`Devengo automático al firmar contrato (base ${IANNA_FMT.MXN(gerente.base)})`,
       });
     });
-    return { asesor, gerente };
+    (broker.partes||[]).forEach(p=>IANNA_FIN.registrarMovimiento({tipo:'comision_broker',operacionId:ap.id,personaId:ap.prospectoId,monto:p.monto,concepto:`Comisión broker — parte ${p.parte} (${IANNA_FMT.PCT(p.pct)})`,documento:ap.id_venta||ap.id_publico,politica_version,motivo:`Devengo broker según esquema ${broker.esquema_nombre||''}`}));
+    return { asesor, gerente, broker };
   }
 
   /* ──────────────────────────────────────────────────────────────
@@ -284,7 +317,7 @@ window.IANNA_COM = (function(){
     // Snapshot en la Operación
     snapshotDePolitica, congelarPolitica,
     // Cálculos
-    conceptos, baseComisionable, distribucionesDisponibles, resolverDistribucion, comisionAsesor, comisionGerente,
+    conceptos, baseComisionable, distribucionesDisponibles, resolverDistribucion, canalOperacion, modalidadOperacion, resolverEsquema, comisionBeneficiario, comisionAsesor, comisionGerente, comisionBroker,
     // Devengo y penalización
     devengarComisiones, calcularPenalizacion,
   };

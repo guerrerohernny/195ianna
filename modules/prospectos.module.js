@@ -237,8 +237,11 @@ function openDetalle(pid){
   // Botones de estatus
   // 1.95: 'Apartado'/'Venta' son estados de la OPERACIÓN — se muestran, jamás se asignan a mano
   const esOper=ESTATUS_OPERACION.includes(p.estatus);
-  $('det-est-btns').innerHTML=(esOper?`<span class="badge" style="background:#1E3D0F;color:#fff;margin-right:6px">${p.estatus} — definido por la Operación (usa ⚙ Operaciones)</span>`:'')
-    +ESTATUS_CRM.concat(ESTATUS_INACTIVOS).map(s=>`<button class="btn btn-xs ${p.estatus===s?'btn-navy':'btn-out'}" ${esOper?'disabled title="El estatus lo gobierna la Operación activa"':''} onclick="cambiarEstatus('${pid}','${s}')">${s}</button>`).join('');
+  const opsPrev=DS.find('apartados').filter(a=>a.prospectoId===pid&&a.estatus==='Venta');
+  const opos=typeof IANNA_OPO!=='undefined'?IANNA_OPO.dePersona(pid):[];
+  $('det-est-btns').innerHTML=(esOper?`<span class="badge" style="background:#1E3D0F;color:#fff;margin-right:6px">${p.estatus} — historial comercial protegido</span>`:'')
+    +(p.estatus==='Venta'?`<button class="btn btn-gold btn-xs" onclick="crearNuevaOportunidadPersona('${pid}')">+ Nueva oportunidad</button>`:ESTATUS_CRM.concat(ESTATUS_INACTIVOS).map(s=>`<button class="btn btn-xs ${p.estatus===s?'btn-navy':'btn-out'}" ${esOper?'disabled title="El estatus lo gobierna la Operación activa"':''} onclick="cambiarEstatus('${pid}','${s}')">${s}</button>`).join(''));
+  if(opsPrev.length||opos.length){ $('det-info').innerHTML+=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)"><b style="font-size:11px">HISTORIAL COMERCIAL</b><div style="font-size:11.5px;color:var(--t2);margin-top:5px">${opsPrev.length} venta(s) histórica(s) · ${opos.length} oportunidad(es)</div></div>`; }
   renderTimeline(pid);
   renderDocsProspecto(pid);
   $$('#m-det .tab').forEach((t,i)=>t.classList.toggle('active',i===0));
@@ -246,6 +249,16 @@ function openDetalle(pid){
   $('rec-fecha').value=new Date().toISOString().split('T')[0];
   openM('m-det');
 }
+function crearNuevaOportunidadPersona(pid){
+  const p=DS.findOne('prospectos',pid); if(!p)return;
+  const fuente=prompt('Fuente de la nueva oportunidad:', 'Recompra')||'Recompra';
+  const o=IANNA_OPO.crear({personaId:pid,proyectoId:'valle-de-aragon',estado:'Nueva',origen:fuente,asesor_asignado:p.asesor,broker_id:null,_motivo:'Nueva compra de cliente existente'});
+  // compatibilidad UI: la Persona vuelve al pipeline sin alterar ventas históricas
+  prospectosService.actualizar(pid,{estatus:'Nuevo'});
+  try{IANNA_MOTOR.auditar('oportunidades',o.id,'NUEVA_OPORTUNIDAD_RECOMPRA',{}, {personaId:pid,id_publico:o.id_publico,origen:fuente},'Cliente existente inicia nueva oportunidad');}catch(e){}
+  toast('Nueva oportunidad creada: '+o.id_publico,'ok',5000); closeM('m-det'); filterProsp(); renderDashboard();
+}
+
 function renderTimeline(pid){
   const p=DS.findOne('prospectos',pid); if(!p) return;
   const segs=DS.find('seguimientos',{prospectoId:pid}).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));

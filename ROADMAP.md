@@ -192,3 +192,7 @@ Entregables principales:
 
 ## Fase 1.97 — Document Lifecycle & Commercial Controls (entregada)
 Flujo documental con aprobación gerencial, folios antes de firma, distribuciones por modalidad, vigencia/refrendo de apartados y correcciones operativas.
+
+
+## Fase 1.97.1 — Operational Consistency Patch ✅
+Control global, multi-oportunidad, comisiones matriciales, coherencia del cierre y correcciones UX.

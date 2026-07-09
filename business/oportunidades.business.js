@@ -69,6 +69,7 @@ window.IANNA_OPO = (function(){
       origen: p.fuente || '',
       presupuesto: p.presupuesto || 0,
       asesor_asignado: p.asesor,
+      broker_id: p.brokerId || null,
       _implicita: true,
       _motivo: 'Oportunidad creada implícitamente por compatibilidad con kanban',
     });

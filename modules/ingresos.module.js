@@ -132,7 +132,7 @@ function renderIngresos(){
           ${isAdmin?`<td style="padding:10px 12px;font-size:12px">${getUser(v.asesor).nombre.split(' ')[0]}</td>`:''}
           <td style="padding:10px 12px;text-align:right">
             <div style="font-weight:700">${mxn(v.com.total)}</div>
-            <div style="font-size:10px;color:var(--t3)">${(v.com.pct*100).toFixed(v.com.pct<0.01?1:0)}% de ${mxn(v.com.base||0)}</div>
+            <div style="font-size:10px;color:var(--t3)">${IANNA_FMT.PCT(v.com.pct)} de ${mxn(v.com.base||0)}</div>
           </td>
           <td style="padding:10px 12px">
             <div style="display:flex;flex-direction:column;gap:5px">

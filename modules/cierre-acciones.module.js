@@ -42,10 +42,21 @@ function confirmarFirmaCierre(){
 function registrarVentaCierre(){ return confirmarFirmaCierre(); }
 function updateCierreWorkflowUI(){
   if(!_cierreData)return; const ap=apartadosService.obtener(_cierreData.ap.id); const st=IANNA_CIERRE.estado(ap);
-  const vb=$('btn-validar-contrato'), pb=$('btn-paquete-firma'), fb=$('btn-descargar-cierre');
+  const vb=$('btn-validar-contrato'), pb=$('btn-paquete-firma'), fb=$('btn-descargar-cierre'), gb=$('btn-generar-borrador'), sv=$('btn-guardar-cierre-preview');
+  const editable=['PREPARACION','BORRADOR','CORRECCION'].includes(st);
+  if(gb){gb.style.display=editable?'':'none'; gb.textContent=st==='BORRADOR'?'📝 Actualizar borrador':'📝 Generar borrador';}
+  if(sv) sv.style.display=editable?'':'none';
   if(vb) vb.style.display=AUTORIZADOR.puede('validar_contrato')&&['BORRADOR','CORRECCION'].includes(st)?'':'none';
   if(pb) pb.style.display=st===IANNA_CIERRE.ESTADOS.VALIDADO?'':'none';
   if(fb) fb.style.display=AUTORIZADOR.puede('confirmar_firma')&&st===IANNA_CIERRE.ESTADOS.VALIDADO?'':'none';
+  const locked=!editable; ['cierre-tab-0','cierre-tab-1'].forEach(tid=>{const t=$(tid); if(t)t.querySelectorAll('input,select,textarea').forEach(el=>{if(el.dataset.adminOverride!=='1')el.disabled=locked;});});
+}
+function abrirReciboAdicionalPreview(){
+  if(!_cierreData||Number(_cierreData.pagoAdic||0)<=0){toast('No existe pago adicional capturado','warn');return;}
+  const ap=apartadosService.obtener(_cierreData.ap.id); const st=IANNA_CIERRE.estado(ap);
+  if(st===IANNA_CIERRE.ESTADOS.VALIDADO||st===IANNA_CIERRE.ESTADOS.FIRMADO){ abrirDocCierre('imprimirReciboPagoAdicional'); return; }
+  // vista previa: documento sin folio definitivo
+  try{ imprimirReciboPagoAdicional(true); }catch(e){ toast('No fue posible abrir la vista previa del recibo adicional','err'); }
 }
 
 // Guardar todo el cierre (datos del cliente + snapshot) sin abrir documentos

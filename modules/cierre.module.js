@@ -161,7 +161,7 @@ function generarCierre(aid){
 
   cargarInstitucionesCierre();
   const _dcf=ap.datos_cierre||{};
-  if($('c-credito-pct')) $('c-credito-pct').value=Number(_dcf.fin_credito_pct||0).toFixed(3);
+  if($('c-credito-pct')) $('c-credito-pct').value=Number(_dcf.fin_credito_pct||0).toLocaleString('es-MX',{maximumFractionDigits:3});
   if($('c-publico-monto')) $('c-publico-monto').value=_dcf.fin_componente_publico_monto||'';
   _cierreGastos=Array.isArray(_dcf.fin_gastos_operacion)&&_dcf.fin_gastos_operacion.length?JSON.parse(JSON.stringify(_dcf.fin_gastos_operacion)):IANNA_VALOR.gastosSugeridos(ap,parseMoneyInput($('c-credito').value),IANNA_VALOR.institucion($('c-institucion')?.value)?.tipo);
   renderGastosCierre();
@@ -253,11 +253,11 @@ function syncCreditoDesdePct(){
 function syncCreditoDesdeMonto(){
   if(_syncCreditoLock||!_cierreData)return; _syncCreditoLock=true;
   const base=IANNA_VALOR.valorTotalVivienda(_cierreData.ap); const monto=parseMoneyInput($('c-credito').value);
-  $('c-credito-pct').value=base?((monto/base)*100).toFixed(3):'0.000'; _syncCreditoLock=false; calcCierre();
+  $('c-credito-pct').value=base?((monto/base)*100).toLocaleString('es-MX',{maximumFractionDigits:3}):'0'; _syncCreditoLock=false; calcCierre();
 }
 function renderGastosCierre(){
   const el=$('cierre-gastos-editor'); if(!el)return;
-  el.innerHTML=_cierreGastos.map((g,i)=>`<div style="display:grid;grid-template-columns:1.5fr .8fr 34px;gap:6px;margin:5px 0"><input value="${g.nombre||''}" oninput="_cierreGastos[${i}].nombre=this.value"><input inputmode="numeric" value="${IANNA_FMT.MXN(g.monto_aplicado||0).replace('$','')}" oninput="formatMoneyInput(this);_cierreGastos[${i}].monto_aplicado=parseMoneyInput(this.value);_cierreGastos[${i}].modificado_manualmente=true;_cierreGastos[${i}].usuario_modificacion=CU?.id||'system';_cierreGastos[${i}].fecha_modificacion=new Date().toISOString();calcCierre()"><button type="button" class="btn btn-red btn-xs" onclick="removeGastoCierre(${i})">×</button></div>`).join('');
+  el.innerHTML=_cierreGastos.map((g,i)=>`<div style="display:grid;grid-template-columns:1.5fr .8fr 34px;gap:6px;margin:5px 0"><input value="${g.nombre||''}" oninput="_cierreGastos[${i}].nombre=this.value"><input inputmode="numeric" value="${IANNA_FMT.MXN(g.monto_aplicado||0).replace('$','')}" oninput="formatMoneyInput(this);_cierreGastos[${i}].monto_aplicado=parseMoneyInput(this.value);_cierreGastos[${i}].modificado_manualmente=true;_cierreGastos[${i}].usuario_modificacion=CU?.id||'system';_cierreGastos[${i}].fecha_modificacion=new Date().toISOString();calcCierre({skipGastosRender:true})"><button type="button" class="btn btn-red btn-xs" onclick="removeGastoCierre(${i})">×</button></div>`).join('');
 }
 function addGastoCierre(){ _cierreGastos.push({id:null,nombre:'Nuevo gasto',origen:'manual',tipo:'manual',monto_calculado:0,monto_aplicado:0,modificado_manualmente:true,usuario_modificacion:CU?.id||'system',fecha_modificacion:new Date().toISOString()}); renderGastosCierre(); }
 function removeGastoCierre(i){ _cierreGastos.splice(i,1); renderGastosCierre(); calcCierre(); }
@@ -278,7 +278,7 @@ function validarFinanciamientoCierre(){
   return {ok:true};
 }
 
-function calcCierre(){
+function calcCierre(opts){ opts=opts||{};
   if(!_cierreData) return;
   const {ap,l,m} = _cierreData;
   const P = getP();
@@ -346,7 +346,7 @@ function calcCierre(){
   _cierreData.vDesembolso = vDesembolso;
   _cierreData.pagares = pagares;
   _cierreData.plazo = plazo;
-  const apCalc={...ap,datos_cierre:{...(ap.datos_cierre||{}),fin_descuento:String(descuento),tipoCredito:inst.tipo}};
+  const apCalc={...ap,datos_cierre:{...(ap.datos_cierre||{}),fin_descuento:String(descuento),tipoCredito:inst.tipo,esquema_comision_id:$('c-distribucion-comision')?.value||''},financial_snapshot:{...(ap.financial_snapshot||{}),tipo_financiamiento:inst.tipo,esquema_comision_id:$('c-distribucion-comision')?.value||''}};
   const comCalc=IANNA_COM.comisionAsesor(apCalc);
   _cierreData.financialSnapshot=IANNA_VALOR.snapshot(ap,{
     gastos:gastosCalc, apartado, descuento, pago_adicional:pagoAdic, forma_pago_adicional:$('c-forma-pago')?.value||'',
@@ -356,11 +356,11 @@ function calcCierre(){
     complemento_bancario:_cierreData.complementoBancario, desembolso:vDesembolso,
     base_comisionable:comCalc.base, base_snapshot:(()=>{const d=IANNA_VALOR.desglose(apCalc);return {precio_vivienda:d.vivienda,excedente_terreno:d.excedente,fraccion_fusionada:d.fraccion_fusionada,lote_adicional:d.lote_adicional,construccion_adicional:d.construccion_adicional,plusvalia:d.plusvalia,descuento,bruto:vTotalVivienda,total:comCalc.base};})(), politica_version:comCalc.politica_version,
     regla_especial_aplicada:comCalc.regla_especial_aplicada, porcentaje_comision:comCalc.porcentaje,
-    distribucion_comision_id:$('c-distribucion-comision')?.value||'', distribucion_comision:comCalc.partes
+    distribucion_comision_id:$('c-distribucion-comision')?.value||'', esquema_comision_id:$('c-distribucion-comision')?.value||'', distribucion_comision:comCalc.partes
   });
 
-  if($('c-complemento')) $('c-complemento').textContent = inst.tipo==='mixto' ? ('Complemento bancario: '+IANNA_FMT.MXN(_cierreData.complementoBancario)) : '';
-  renderGastosCierre();
+  if($('c-complemento')) $('c-complemento').textContent = inst.tipo==='mixto' ? ('Financiamiento total: '+IANNA_FMT.MXN(credito)+' · Crédito bancario: '+IANNA_FMT.MXN(_cierreData.complementoBancario)) : '';
+  if(!opts.skipGastosRender) renderGastosCierre();
 
   // Render financial table
   const rows = [
@@ -377,7 +377,7 @@ function calcCierre(){
     ['Apartado', '− '+mxn(apartado)],
     ...(descuento>0?[['Descuento', '− '+mxn(descuento)]]:[]),
     ...(pagoAdic>0?[['Pago adicional', '− '+mxn(pagoAdic)]]:[]),
-    ...(credito>0?[['Crédito hipotecario', '− '+mxn(credito)]]:[]),
+    ...(credito>0?(inst.tipo==='mixto'?[['Crédito bancario', '− '+mxn(_cierreData.complementoBancario)],[inst.componente_publico||'Componente público', '− '+mxn(_cierreData.componentePublicoMonto)]]:[['Crédito hipotecario', '− '+mxn(credito)]]):[]),
     ['MONTO A PAGAR (DESEMBOLSO)', mxn(Math.max(0,vDesembolso)), true, 'gold'],
   ];
 
@@ -408,6 +408,8 @@ function updateCierrePreview(){
   if(!_cierreData) return;
   const {ap,l,m,numCliente,folio,vTotalVivienda,vTotalOp,vDesembolso,pagares,plazo} = _cierreData;
   const nombre = syncNombreCierre()||'—';
+  const rb=$('prev-recibo-adicional-btn'), rm=$('prev-recibo-adicional-meta');
+  if(rb){ const tiene=Number(_cierreData.pagoAdic||0)>0; rb.style.display=tiene?'flex':'none'; if(tiene&&rm){ const apNow=apartadosService.obtener(ap.id); const st=IANNA_CIERRE.estado(apNow); const fol=apNow?.recibo_pago_adicional?.folio||apNow?.recibo_pago_adicional_folio||''; rm.textContent=(fol?'('+fol+') ':'')+(st===IANNA_CIERRE.ESTADOS.VALIDADO?'— emitido, pendiente de confirmación':'— vista previa sin folio'); } }
   $('cierre-preview-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12.5px">
       <div><b>Cliente:</b> ${nombre}</div>
@@ -474,4 +476,13 @@ function renderDistribucionesCierre(){
   const prev=sel.value; sel.innerHTML=opts.map(x=>`<option value="${x.id}">${x.nombre}</option>`).join('');
   const recomendado=inst.tipo==='contado'?pol.distribuciones_cobro?.contado?.id:pol.distribuciones_cobro?.credito?.id;
   sel.value=(prev&&opts.some(x=>x.id===prev))?prev:(recomendado||opts[0]?.id||'');
+}
+
+// 1.97.1 — resolución de esquema Modalidad × Canal
+function renderEsquemasComisionCierre(){
+  const sel=$('c-distribucion-comision'); if(!sel||!_cierreData)return;
+  const ap=apartadosService.obtener(_cierreData.ap.id); const pol=IANNA_COM.politicaActual(); const mod=IANNA_COM.modalidadOperacion({...ap,financial_snapshot:{...(ap.financial_snapshot||{}),tipo_financiamiento:IANNA_VALOR.institucion($('c-institucion')?.value)?.tipo}}); const canal=IANNA_COM.canalOperacion(ap);
+  const arr=(pol.esquemas_comision||[]).filter(e=>(e.modalidad===mod||e.modalidad==='especial')&&(e.canal===canal||e.canal==='cualquiera'));
+  const actual=sel.value; sel.innerHTML=arr.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join(''); if(actual&&arr.some(e=>e.id===actual))sel.value=actual;
+  if(!sel.value&&arr[0])sel.value=arr[0].id;
 }

@@ -323,6 +323,20 @@ t('gerente valida y asigna folios a pagarés antes de Venta',()=>{
 t('pago adicional no entra al ledger hasta confirmar firma',()=>{ eq(X("IANNA_FIN.ingresosNetosOperacion(_a197.id)"),0); const r=X("IANNA_CIERRE.confirmarFirma(_a197.id)"); verdad(r.ok); eq(X("IANNA_FIN.ingresosNetosOperacion(_a197.id)"),50000); });
 t('distribuciones disponibles incluyen crédito y contado',()=>{ const n=X("IANNA_COM.distribucionesDisponibles(IANNA_COM.politicaDefault()).map(x=>x.tipo)"); verdad(n.includes('credito')&&n.includes('contado')); });
 
+
+/* ── 1.97.1 · CONSISTENCIA OPERATIVA ── */
+console.log('▶ Fase 1.97.1 (Operational Consistency Patch)');
+t('porcentaje flexible no rellena ceros',()=>{ eq(X("IANNA_FMT.PCT(0.9)"),'90 %'); eq(X("IANNA_FMT.PCT(0.8545)"),'85.45 %'); });
+t('motor v2 resuelve Crédito + Broker con asesor 1% y broker 2%',()=>{
+  const r=X(`(()=>{const p=IANNA_COM.politicaDefault();const ap={..._ap196,broker_id:'BRK-1',politica_snapshot:p,financial_snapshot:{tipo_financiamiento:'credito',base_comisionable_snapshot:{precio_vivienda:4670000,excedente_terreno:90000,construccion_adicional:700000,plusvalia:50000},total_gastos_operacion:0}};return {a:IANNA_COM.comisionAsesor(ap),b:IANNA_COM.comisionBroker(ap)}})()`);
+  verdad(Math.abs(r.a.porcentaje-.01)<1e-9,'asesor'); verdad(Math.abs(r.b.porcentaje-.02)<1e-9,'broker');
+});
+t('nueva oportunidad conserva Persona/Cliente y crea OPO distinta',()=>{
+  X("var _p1971=prospectosService.crear({nombre:'Cliente Recompra',telefono:'667 111 9977',estatus:'Venta',asesor:'u_test',id_cliente:'CLI-000999'});");
+  const a=X("IANNA_PIPELINE.nuevaOportunidad(_p1971.id,'Recompra')"); verdad(a.ok); eq(X("prospectosService.obtener(_p1971.id).id_cliente"),'CLI-000999'); verdad(/^OPO-/.test(a.oportunidad.id_publico));
+});
+t('esquema Contado + Directo mantiene distribución propia',()=>{ const p=X("IANNA_COM.politicaDefault()"); const e=p.esquemas_comision.find(x=>x.modalidad==='contado'&&x.canal==='directo'); eq(e.partes.length,2); verdad(Math.abs(e.partes.reduce((s,x)=>s+x.pct,0)-1)<1e-9); });
+
 console.log('\n═════════════════════════════════════');
 console.log(`RESULTADO: ${ok} pasaron · ${mal} fallaron`);
 if (mal) { console.log('\nFallas:\n - ' + fallas.join('\n - ')); process.exit(1); }

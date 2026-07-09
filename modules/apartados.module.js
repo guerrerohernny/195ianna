@@ -66,7 +66,7 @@ function openApartadoFlow(clave_pre=null){
   $('ap-lote').dataset.editId='';
   if(!AUTORIZADOR.puede('capturar_para_otros')) $('ap-ases').value=CU.id;
   if(clave_pre){ $('ap-lote').value=clave_pre; onLoteChange(); }
-  else { $('ap-lote').value=''; $('ap-modelo').value=''; }
+  else { $('ap-lote').value=''; $('ap-modelo').value=''; $('ap-modelo').disabled=false; }
   openM('m-apt');
 }
 function fillAsesor(){
@@ -97,6 +97,9 @@ function onLoteChange(){
   refreshModelosApartado();
   if(!clave){ $('ap-lote-ficha').style.display='none'; return; }
   const l=getLote(clave); if(!l) return;
+  const modeloBloqueado=!!l.modelo_asignado && ['Entrega Rápida','Casa Muestra','En construcción'].includes(l.estado);
+  if(modeloBloqueado){ $('ap-modelo').value=l.modelo_asignado; $('ap-modelo').disabled=true; $('ap-modelo').title='Modelo físico asignado al lote. Solo Administración puede cambiarlo desde Inventario.'; onModeloChange(); }
+  else { $('ap-modelo').disabled=false; $('ap-modelo').title=''; }
   $('ap-lote-ficha').style.display='block';
   $('ap-lote-info').innerHTML=[
     ['Ubicación',`<b>${ubicacionLote(l)}</b>`],['Manzana',l.mz],['Lote',l.lote],
@@ -239,7 +242,8 @@ function saveApartado(){
   const adClaveVal=$('ap-lote-adic')?.value;
   const adActivo=$('ap-lote-adic-sel')?.style.display!=='none'&&adClaveVal;
   const editId=$('ap-lote').dataset.editId||'';
-  const ap={prospectoId,clave_lote,modelo_id,asesor:$('ap-ases').value,fecha_apartado:$('ap-fecha').value, vigencia_dias_snapshot:Number(getP().vigencia_apartado_dias||15), fecha_vencimiento:(()=>{const d=new Date($('ap-fecha').value+'T12:00:00');d.setDate(d.getDate()+Number(getP().vigencia_apartado_dias||15));return d.toISOString().slice(0,10)})(),monto_enganche:parseMoneyInput($('ap-monto').value)||50000,metodo_pago,valor_operacion,estatus:'Activo',modelo_nombre:getMod(modelo_id)?.nombre||'',construccion_adicional_desc:caDesc,construccion_adicional_m2:caM2,construccion_adicional_val:caVal,clave_lote_adicional:adActivo?adClaveVal:''};
+  const _opo=typeof IANNA_OPO!=='undefined'?IANNA_OPO.oportunidadImplicita(prospectoId):null; const _pp=DS.findOne('prospectos',prospectoId)||{};
+  const ap={prospectoId,oportunidadId:_opo?.id||null,broker_id:_opo?.broker_id||_pp.brokerId||null,fuente:_opo?.origen||_pp.fuente||'',clave_lote,modelo_id,asesor:$('ap-ases').value,fecha_apartado:$('ap-fecha').value, vigencia_dias_snapshot:Number(getP().vigencia_apartado_dias||15), fecha_vencimiento:(()=>{const d=new Date($('ap-fecha').value+'T12:00:00');d.setDate(d.getDate()+Number(getP().vigencia_apartado_dias||15));return d.toISOString().slice(0,10)})(),monto_enganche:parseMoneyInput($('ap-monto').value)||50000,metodo_pago,valor_operacion,estatus:'Activo',modelo_nombre:getMod(modelo_id)?.nombre||'',construccion_adicional_desc:caDesc,construccion_adicional_m2:caM2,construccion_adicional_val:caVal,clave_lote_adicional:adActivo?adClaveVal:''};
 
   if(editId){
     // EDITAR: actualizar registro existente, no crear uno nuevo

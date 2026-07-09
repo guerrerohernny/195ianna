@@ -97,7 +97,7 @@ function saveParametros(){
 
 
 // ══ FASE 1.9: Política Comercial editable desde Parámetros ══════
-let _distDraft={asesor:[],gerente:[]}; let _cobroDistDraft={credito:null,contado:null,especiales:[]};
+let _distDraft={asesor:[],gerente:[]}; let _cobroDistDraft={credito:null,contado:null,especiales:[]}; let _esquemasComisionDraft=[];
 function renderPoliticaComercial(){
   const pol = IANNA_COM.politicaActual();
   $('pc-version').textContent = pol.version;
@@ -107,14 +107,14 @@ function renderPoliticaComercial(){
   $('pc-bc-adic').checked = !!(pol.base_comisionable.adicional||pol.base_comisionable.fraccion_fusionada||pol.base_comisionable.lote_adicional||pol.base_comisionable.construccion_adicional);
   $('pc-bc-gastos').checked = !!pol.base_comisionable.gastos_operacion;
   $('pc-desc').checked = !!pol.aplicar_descuento;
-  $('pc-pct-ad').value = (pol.porcentajes.asesor_directo*100).toFixed(3);
-  $('pc-pct-ab').value = (pol.porcentajes.asesor_broker*100).toFixed(3);
-  $('pc-pct-ge').value = (pol.porcentajes.gerente*100).toFixed(3);
-  $('pc-pct-bk').value = (pol.porcentajes.broker*100).toFixed(3);
+  $('pc-pct-ad').value = (pol.porcentajes.asesor_directo*100).toLocaleString('es-MX',{maximumFractionDigits:3});
+  $('pc-pct-ab').value = (pol.porcentajes.asesor_broker*100).toLocaleString('es-MX',{maximumFractionDigits:3});
+  $('pc-pct-ge').value = (pol.porcentajes.gerente*100).toLocaleString('es-MX',{maximumFractionDigits:3});
+  $('pc-pct-bk').value = (pol.porcentajes.broker*100).toLocaleString('es-MX',{maximumFractionDigits:3});
   $('pc-contado-act').checked=!!pol.reglas_especiales?.contado?.activa;
-  $('pc-contado-pct').value=((pol.reglas_especiales?.contado?.porcentaje_asesor||0.025)*100).toFixed(3);
+  $('pc-contado-pct').value=((pol.reglas_especiales?.contado?.porcentaje_asesor||0.025)*100).toLocaleString('es-MX',{maximumFractionDigits:3});
   _distDraft.asesor=JSON.parse(JSON.stringify(pol.distribucion_asesor||[])); _distDraft.gerente=JSON.parse(JSON.stringify(pol.distribucion_gerente||[]));
-  const d=pol.distribuciones_cobro||IANNA_COM.politicaDefault().distribuciones_cobro; _cobroDistDraft=JSON.parse(JSON.stringify(d)); renderCobroDistribuciones();
+  const d=pol.distribuciones_cobro||IANNA_COM.politicaDefault().distribuciones_cobro; _cobroDistDraft=JSON.parse(JSON.stringify(d)); renderCobroDistribuciones(); _esquemasComisionDraft=JSON.parse(JSON.stringify(pol.esquemas_comision||IANNA_COM.politicaDefault().esquemas_comision||[])); renderEsquemasComision();
   $('pc-pen-apt').value = (((pol.penalizaciones?.cancelacion_apartado?.valor)||0)*100).toFixed(2);
   $('pc-pen-ven').value = (((pol.penalizaciones?.cancelacion_venta?.valor)||0)*100).toFixed(2);
 }
@@ -126,8 +126,16 @@ function addDistRow(tipo){ _distDraft[tipo].push({parte:'parte_'+(_distDraft[tip
 function removeDist(tipo,i){ _distDraft[tipo].splice(i,1); renderDistRows(tipo); }
 function updateDist(tipo,i,campo,val){ if(campo==='pct') _distDraft[tipo][i].pct=(parseFloat(val)||0)/100; else _distDraft[tipo][i][campo]=val; }
 function _validarDist(arr,nombre){ const sum=(arr||[]).reduce((s,x)=>s+Number(x.pct||0),0); if(Math.abs(sum-1)>0.0001){ toast(`La distribución de ${nombre} debe sumar 100%`,'err'); return false; } return true; }
+function renderEsquemasComision(){
+  const el=$('pc-esquemas-comision'); if(!el)return;
+  el.innerHTML=_esquemasComisionDraft.map((e,ei)=>`<div class="card" style="padding:12px;margin:8px 0;border-left:4px solid var(--navy)"><div style="display:grid;grid-template-columns:1.5fr .8fr .8fr auto;gap:8px;align-items:end"><div class="fg" style="margin:0"><label>Nombre</label><input value="${e.nombre||''}" oninput="_esquemasComisionDraft[${ei}].nombre=this.value"></div><div class="fg" style="margin:0"><label>Modalidad</label><select onchange="_esquemasComisionDraft[${ei}].modalidad=this.value"><option value="credito" ${e.modalidad==='credito'?'selected':''}>Crédito</option><option value="contado" ${e.modalidad==='contado'?'selected':''}>Contado</option><option value="especial" ${e.modalidad==='especial'?'selected':''}>Especial</option></select></div><div class="fg" style="margin:0"><label>Canal</label><select onchange="_esquemasComisionDraft[${ei}].canal=this.value"><option value="directo" ${e.canal==='directo'?'selected':''}>Directo</option><option value="broker" ${e.canal==='broker'?'selected':''}>Broker</option><option value="cualquiera" ${e.canal==='cualquiera'?'selected':''}>Cualquiera</option></select></div><button class="btn btn-red btn-xs" onclick="_esquemasComisionDraft.splice(${ei},1);renderEsquemasComision()">Eliminar</button></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px"><div class="fg" style="margin:0"><label>Asesor (%)</label><input type="number" step="0.001" value="${Number((e.porcentajes?.asesor||0)*100).toLocaleString('es-MX',{maximumFractionDigits:3})}" oninput="setPctEsquema(${ei},'asesor',this.value)"></div><div class="fg" style="margin:0"><label>Gerente (%)</label><input type="number" step="0.001" value="${Number((e.porcentajes?.gerente||0)*100).toLocaleString('es-MX',{maximumFractionDigits:3})}" oninput="setPctEsquema(${ei},'gerente',this.value)"></div><div class="fg" style="margin:0"><label>Broker (%)</label><input type="number" step="0.001" value="${Number((e.porcentajes?.broker||0)*100).toLocaleString('es-MX',{maximumFractionDigits:3})}" oninput="setPctEsquema(${ei},'broker',this.value)"></div></div><div style="font-size:11px;font-weight:700;margin-top:10px">Distribución temporal</div>${(e.partes||[]).map((x,i)=>`<div style="display:grid;grid-template-columns:1.5fr .7fr 34px;gap:6px;margin-top:6px"><input value="${x.nombre||''}" oninput="_esquemasComisionDraft[${ei}].partes[${i}].nombre=this.value"><input type="number" value="${Number((x.pct||0)*100).toLocaleString('es-MX',{maximumFractionDigits:3})}" oninput="_esquemasComisionDraft[${ei}].partes[${i}].pct=(parseFloat(this.value)||0)/100"><button class="btn btn-red btn-xs" onclick="_esquemasComisionDraft[${ei}].partes.splice(${i},1);renderEsquemasComision()">×</button></div>`).join('')}<button class="btn btn-out btn-xs" style="margin-top:6px" onclick="_esquemasComisionDraft[${ei}].partes.push({parte:'parte_'+Date.now(),nombre:'Nueva parte',evento:'manual',pct:0});renderEsquemasComision()">+ Parte</button></div>`).join('');
+}
+function setPctEsquema(i,rol,v){if(!_esquemasComisionDraft[i].porcentajes)_esquemasComisionDraft[i].porcentajes={};_esquemasComisionDraft[i].porcentajes[rol]=(parseFloat(v)||0)/100;}
+function addEsquemaComisionEspecial(){_esquemasComisionDraft.push({id:'EC-ESP-'+Date.now(),nombre:'Nuevo esquema especial',modalidad:'especial',canal:'cualquiera',porcentajes:{asesor:0,gerente:0,broker:0},partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:1}]});renderEsquemasComision();}
+function validarEsquemasComision(){for(const e of _esquemasComisionDraft){const sum=(e.partes||[]).reduce((s,x)=>s+Number(x.pct||0),0);if(Math.abs(sum-1)>0.0001){toast(`La distribución de "${e.nombre}" debe sumar 100%`,'err');return false;}}return true;}
+
 function guardarPoliticaComercial(){
-  if(!_validarCobroDist()) return;
+  if(!_validarCobroDist()||!validarEsquemasComision()) return;
   const nueva = {
     base_comisionable: {
       precio_vivienda:$('pc-bc-viv').checked, excedente_terreno:$('pc-bc-exc').checked, plusvalia:$('pc-bc-plus').checked,
@@ -136,7 +144,7 @@ function guardarPoliticaComercial(){
     },
     aplicar_descuento:$('pc-desc').checked,
     porcentajes:{ asesor_directo:(parseFloat($('pc-pct-ad').value)||0)/100, asesor_broker:(parseFloat($('pc-pct-ab').value)||0)/100, gerente:(parseFloat($('pc-pct-ge').value)||0)/100, broker:(parseFloat($('pc-pct-bk').value)||0)/100 },
-    distribucion_asesor:JSON.parse(JSON.stringify(_cobroDistDraft.credito?.partes||[])), distribucion_gerente:JSON.parse(JSON.stringify(_cobroDistDraft.credito?.partes||[])), distribuciones_cobro:JSON.parse(JSON.stringify(_cobroDistDraft)),
+    distribucion_asesor:JSON.parse(JSON.stringify(_cobroDistDraft.credito?.partes||[])), distribucion_gerente:JSON.parse(JSON.stringify(_cobroDistDraft.credito?.partes||[])), distribuciones_cobro:JSON.parse(JSON.stringify(_cobroDistDraft)), esquemas_comision:JSON.parse(JSON.stringify(_esquemasComisionDraft)),
     reglas_especiales:{contado:{activa:$('pc-contado-act').checked,porcentaje_asesor:(parseFloat($('pc-contado-pct').value)||0)/100}},
     penalizaciones:{ cancelacion_apartado:{tipo:'porcentaje',valor:(parseFloat($('pc-pen-apt').value)||0)/100,exhibiciones:1,retencion_comisiones:false}, cancelacion_venta:{tipo:'porcentaje',valor:(parseFloat($('pc-pen-ven').value)||0)/100,exhibiciones:1,retencion_comisiones:false,distribucion:[]} }
   };

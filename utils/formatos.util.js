@@ -47,15 +47,16 @@ window.IANNA_FMT = (function(){
   }
 
   // ── PORCENTAJE ────────────────────────────────────────────────
-  // Recibe fracción (0.035) o número entero (3.5) — detecta cuál según magnitud.
-  // Salida uniforme: "3.50 %".
+  // Recibe fracción (0.035) o número porcentual (3.5). Por defecto usa
+  // representación flexible: 90 %, 85.45 %, 0.5 %, 2.125 %.
   function PCT(v, decimales){
     const num = Number(v);
-    if(!isFinite(num)) return '0.00 %';
+    if(!isFinite(num)) return '0 %';
     const val = Math.abs(num) <= 1 ? num*100 : num;
-    const d = (typeof decimales==='number') ? decimales : 2;
-    return val.toLocaleString('es-MX',{minimumFractionDigits:d, maximumFractionDigits:d})+' %';
+    if(typeof decimales==='number') return val.toLocaleString('es-MX',{minimumFractionDigits:decimales,maximumFractionDigits:decimales})+' %';
+    return val.toLocaleString('es-MX',{minimumFractionDigits:0, maximumFractionDigits:3})+' %';
   }
+  function PCT_FLEX(v){ return PCT(v); }
 
   // ── FOLIO ─────────────────────────────────────────────────────
   // Todos los folios visuales con el mismo formato: 8 dígitos con ceros a la izquierda,
@@ -187,7 +188,7 @@ window.IANNA_FMT = (function(){
     return 'M'+f(manzana)+'-L'+f(lote);
   }
 
-  return { MXN, M2, TEL, PCT, FOLIO, UBICACION, NUM_A_LETRAS, FECHA_LARGA, FECHA_CORTA };
+  return { MXN, M2, TEL, PCT, PCT_FLEX, FOLIO, UBICACION, NUM_A_LETRAS, FECHA_LARGA, FECHA_CORTA };
 })();
 
 // ── ALIAS DE COMPATIBILIDAD ─────────────────────────────────────

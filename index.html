@@ -63,6 +63,7 @@
       <div class="nav-i" data-page="brokers" onclick="navTo('brokers',this)"><span class="ni">🤝</span>Mis Brokers</div>
       <div class="nav-i nav-admin" data-page="configuracion" onclick="navTo('configuracion',this)"><span class="ni">🔧</span>Configuración</div>
       <div class="nav-i nav-admin" data-page="auditoria" onclick="navTo('auditoria',this)"><span class="ni">🔍</span>Auditoría</div>
+      <div class="nav-i nav-admin" data-page="control-operaciones" onclick="navTo('control-operaciones',this)"><span class="ni">🧾</span>Control de Operaciones</div>
     </nav>
     <div class="sb-ft"><div class="sb-out" onclick="doLogout()">🚪 Cerrar sesión</div></div>
   </aside>
@@ -236,6 +237,14 @@
       </div>
     </div>
 
+
+    <!-- CONTROL DE OPERACIONES 1.97.1 -->
+    <div class="page" id="page-control-operaciones">
+      <div class="sechdr"><div><div class="sectl">Control de Operaciones</div><div class="secst">Trazabilidad global de entidades, documentos y movimientos</div></div></div>
+      <div class="fbar"><div class="fsrch"><span>🔎</span><input id="co-search" placeholder="REC-000001, APT-000001, cliente, ubicación…" oninput="renderControlOperaciones()"></div><select class="fsel" id="co-tipo" onchange="renderControlOperaciones()"><option value="">Todos</option><option value="operacion">Operaciones</option><option value="documento">Documentos</option><option value="financiero">Financieros</option><option value="auditoria">Auditoría</option></select></div>
+      <div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Fecha</th><th>ID</th><th>Tipo</th><th>Cliente</th><th>Ubicación</th><th>Estado</th><th>Importe</th></tr></thead><tbody id="co-tbody"></tbody></table></div></div>
+    </div>
+
     <!-- PARÁMETROS -->
     <div class="page" id="page-parametros">
       <div class="sechdr"><div><div class="sectl">Parámetros</div><div class="secst">Configuración de precios, modelos y política comercial — alimenta todo el CRM</div></div><button class="btn btn-gold" onclick="saveParametros()">💾 Guardar parámetros</button></div>
@@ -298,7 +307,12 @@
           </div>
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0">
-          <div style="font-weight:700;font-size:12.5px;margin-bottom:6px">Distribución del cobro (N partes — deben sumar 100%)</div>
+          <div style="font-weight:700;font-size:12.5px;margin-bottom:6px">Esquemas de comisión por Modalidad × Canal</div>
+          <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px">Cada esquema define porcentajes de Asesor, Gerente y Broker, además de la distribución temporal del cobro. El Cierre resuelve primero la modalidad y después el canal de la Oportunidad.</div>
+          <div id="pc-esquemas-comision"></div>
+          <button type="button" class="btn btn-out btn-xs" onclick="addEsquemaComisionEspecial()">+ Agregar esquema especial</button>
+          <details style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;color:var(--t3)">Compatibilidad: distribuciones antiguas</summary>
+          <div style="font-weight:700;font-size:12.5px;margin:10px 0 6px">Distribución del cobro heredada</div>
           <div class="fg" style="margin-bottom:10px"><label><input type="checkbox" id="pc-contado-act"> Comisión especial para venta de contado</label></div>
           <div class="fg" style="max-width:260px;margin-bottom:12px"><label>Asesor contado (%)</label><input type="number" step="0.001" id="pc-contado-pct"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
@@ -306,6 +320,8 @@
             <div><b style="font-size:12px">Ventas de contado</b><div id="pc-dist-contado"></div><button type="button" class="btn btn-out btn-xs" onclick="addCobroDistRow('contado')">+ Agregar parte</button></div>
             <div style="grid-column:span 2"><b style="font-size:12px">Distribuciones especiales</b><div id="pc-dist-especiales"></div><button type="button" class="btn btn-out btn-xs" onclick="addDistribucionEspecial()">+ Agregar distribución especial</button></div>
           </div>
+        </div>
+          </details>
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0">
           <div style="font-weight:700;font-size:12.5px;margin-bottom:6px">Penalizaciones</div>
@@ -957,7 +973,7 @@
         <div class="fg" id="c-publico-wrap" style="display:none"><label id="c-publico-label">Monto componente público</label><input type="text" inputmode="numeric" id="c-publico-monto" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"><small id="c-complemento" style="display:block;margin-top:4px;color:var(--t3)"></small></div>
         <div class="fg"><label>Descuento ($)</label><input type="text" inputmode="numeric" id="c-descuento" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"></div>
         <div class="fg"><label>Pago adicional ($)</label><input type="text" inputmode="numeric" id="c-pago-adic" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"></div>
-        <div class="fg"><label>Forma de pago adicional</label><select id="c-forma-pago"><option>Transferencia electrónica</option><option>SPEI</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option><option>Otro</option></select></div>
+        <div class="fg"><label>Forma de pago adicional</label><select id="c-forma-pago"><option>Transferencia electrónica</option><option>Tarjeta</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option><option>Otro</option></select></div>
         <div class="fg"><label>Distribución de comisión</label><select id="c-distribucion-comision" onchange="calcCierre()"></select></div>
         <div class="fg"><label>Plazo desembolso (1-12 meses)</label>
           <select id="c-plazo" onchange="calcCierre()">
@@ -974,7 +990,7 @@
       <div style="margin-top:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Gastos de operación</b><button class="btn btn-out btn-xs" type="button" onclick="addGastoCierre()">+ Agregar gasto</button></div><div id="cierre-gastos-editor"></div></div>
       <div id="cierre-financiero" style="margin-top:16px;border:1px solid var(--bd);border-radius:8px;overflow:hidden"></div>
       <div id="cierre-pagares" style="margin-top:12px"></div>
-      <div style="display:flex;justify-content:space-between;margin-top:16px">
+      <div class="cierre-sticky-actions" style="display:flex;justify-content:space-between;margin-top:16px">
         <button class="btn btn-out" onclick="cierreTab(0)">← Cliente</button>
         <div style="display:flex;gap:8px">
           <button class="btn btn-out" onclick="guardarCierreCompleto()">💾 Guardar</button>
@@ -989,6 +1005,7 @@
         <div style="font-weight:700;color:#166534;margin-bottom:10px">📁 Documentos del cierre — da clic en cada uno para abrirlo y descargarlo</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <button class="btn btn-out btn-sm" style="justify-content:space-between;background:#fff" onclick="abrirDocCierre('imprimirReciboApartado')"><span>📄 Recibo de Apartado (Folio <span id="prev-folio"></span>)</span><span>⬇</span></button>
+          <button class="btn btn-out btn-sm" id="prev-recibo-adicional-btn" style="justify-content:space-between;background:#fff;display:none" onclick="abrirReciboAdicionalPreview()"><span>📄 Recibo de Pago Adicional <span id="prev-recibo-adicional-meta"></span></span><span>⬇</span></button>
           <button class="btn btn-out btn-sm" style="justify-content:space-between;background:#fff" onclick="abrirDocCierre('imprimirFormatoApartado')"><span>📄 Formato de Apartado de Vivienda</span><span>⬇</span></button>
           <button class="btn btn-out btn-sm" style="justify-content:space-between;background:#fff" onclick="abrirDocCierre('imprimirDatosGenerales')"><span>📄 Datos Generales del Solicitante</span><span>⬇</span></button>
           <button class="btn btn-out btn-sm" style="justify-content:space-between;background:#fff" onclick="abrirDocCierre('imprimirCartaAutorizacion')"><span>📄 Carta de Autorización Uso de Datos</span><span>⬇</span></button>
@@ -1001,11 +1018,11 @@
       </div>
       <div id="cierre-preview-resumen" style="font-size:13px;background:var(--s2);border-radius:8px;padding:14px;margin-bottom:16px"></div>
       <div id="cierre-doc-queue-info" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;margin-bottom:16px"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="cierre-sticky-actions" style="display:flex;justify-content:space-between;align-items:center">
         <button class="btn btn-out" onclick="cierreTab(1)">← Financiero</button>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-out" onclick="guardarCierreCompleto()">💾 Guardar</button>
-          <button class="btn btn-out" onclick="generarBorradorCierre()">📝 Generar borrador</button>
+          <button class="btn btn-out" id="btn-guardar-cierre-preview" onclick="guardarCierreCompleto()">💾 Guardar</button>
+          <button class="btn btn-out" id="btn-generar-borrador" onclick="generarBorradorCierre()">📝 Generar borrador</button>
           <button class="btn btn-gold" onclick="validarContratoCierre()" id="btn-validar-contrato">✓ Validar contrato</button>
           <button class="btn btn-navy" onclick="descargarPaqueteFirma()" id="btn-paquete-firma">⬇ Paquete para firma</button>
           <button class="btn btn-green" onclick="confirmarFirmaCierre()" id="btn-descargar-cierre">✅ Confirmar firma y registrar VENTA</button>
@@ -1256,6 +1273,7 @@
 <script src="modules/auth.module.js"></script>
 <script src="modules/brokers.module.js"></script>
 <script src="modules/auditoria.module.js"></script>
+<script src="modules/control-operaciones.module.js"></script>
 <script src="modules/cotizador.module.js"></script>
 <script src="modules/navigation.module.js"></script>
 <script src="modules/dashboard.module.js"></script>
@@ -1287,6 +1305,7 @@
 <script src="business/cierre-lifecycle.business.js"></script> <!-- 1.95: flujo único de estatus CRM -->
 <script src="business/migraciones196.business.js"></script>
 <script src="business/migraciones197.business.js"></script>
+<script src="business/migraciones1971.business.js"></script>
 <script src="modules/operaciones-ui.module.js"></script> <!-- 1.95: UI del Motor de Operaciones -->
 <script src="modules/cobranza.module.js"></script>
 <script src="modules/cierre-acciones.module.js"></script>
