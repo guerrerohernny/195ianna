@@ -188,3 +188,7 @@ Entregables principales:
 - hardening del Modal de Operaciones y totales financieros.
 
 **Verificación reproducible:** 54 pruebas automatizadas verdes, 9 guardas arquitectónicas verdes y sintaxis JavaScript limpia. La validación E2E visual en navegador queda como gate de staging antes de abrir Fase 2.
+
+
+## Fase 1.97 — Document Lifecycle & Commercial Controls (entregada)
+Flujo documental con aprobación gerencial, folios antes de firma, distribuciones por modalidad, vigencia/refrendo de apartados y correcciones operativas.

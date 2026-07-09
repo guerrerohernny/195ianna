@@ -26,3 +26,5 @@ document.addEventListener('DOMContentLoaded', function() {
   if(btnLogin) btnLogin.addEventListener('click', function(){ doLogin(); });
 })();
 
+
+try{ if(typeof IANNA_MIG_197!=='undefined') IANNA_MIG_197.run(); }catch(e){ console.error('[1.97] migración',e); }

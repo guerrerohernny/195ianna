@@ -302,8 +302,9 @@
           <div class="fg" style="margin-bottom:10px"><label><input type="checkbox" id="pc-contado-act"> Comisión especial para venta de contado</label></div>
           <div class="fg" style="max-width:260px;margin-bottom:12px"><label>Asesor contado (%)</label><input type="number" step="0.001" id="pc-contado-pct"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-            <div><b style="font-size:12px">Asesor</b><div id="pc-dist-asesor"></div><button type="button" class="btn btn-out btn-xs" onclick="addDistRow('asesor')">+ Agregar parte</button></div>
-            <div><b style="font-size:12px">Gerente</b><div id="pc-dist-gerente"></div><button type="button" class="btn btn-out btn-xs" onclick="addDistRow('gerente')">+ Agregar parte</button></div>
+            <div><b style="font-size:12px">Ventas con crédito hipotecario</b><div id="pc-dist-credito"></div><button type="button" class="btn btn-out btn-xs" onclick="addCobroDistRow('credito')">+ Agregar parte</button></div>
+            <div><b style="font-size:12px">Ventas de contado</b><div id="pc-dist-contado"></div><button type="button" class="btn btn-out btn-xs" onclick="addCobroDistRow('contado')">+ Agregar parte</button></div>
+            <div style="grid-column:span 2"><b style="font-size:12px">Distribuciones especiales</b><div id="pc-dist-especiales"></div><button type="button" class="btn btn-out btn-xs" onclick="addDistribucionEspecial()">+ Agregar distribución especial</button></div>
           </div>
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0">
@@ -323,7 +324,7 @@
           <div>
             <div class="param-section">
             <div class="param-section-title">💵 Precios de terreno</div>
-            <div class="fg"><label>Precio m² — Solo terreno (sin casa)</label><input type="number" id="pm-solo" placeholder="14500"></div>
+            <div class="fg"><label>Precio m² — Solo terreno (sin casa)</label><input type="number" id="pm-solo" placeholder="14500"></div><div class="fg"><label>Vigencia estándar del apartado (días)</label><input type="number" id="pm-vigencia-apartado" min="1" placeholder="15"></div>
             <div class="fg"><label>Precio m² — Excedente con casa</label><input type="number" id="pm-exc" placeholder="9000"></div>
             <div class="fg"><label>Precio m² — Lote adicional</label><input type="number" id="pm-adic" placeholder="13000"></div>
           </div>
@@ -898,7 +899,10 @@
     <div id="cierre-tab-0" style="padding:20px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div style="grid-column:span 2"><div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;border-bottom:1px solid var(--bd);padding-bottom:6px">Datos del cliente</div></div>
-        <div class="fg"><label>Nombre completo *</label><input type="text" id="c-nombre" placeholder="Apellido Paterno Materno Nombre(s)"></div>
+        <div class="fg"><label>Nombre(s) *</label><input type="text" id="c-nombres" placeholder="Ej: Josue Alfredo"></div>
+        <div class="fg"><label>Apellido paterno *</label><input type="text" id="c-apellido-paterno" placeholder="Ej: Palazuelos"></div>
+        <div class="fg"><label>Apellido materno</label><input type="text" id="c-apellido-materno" placeholder="Ej: Miramontes"></div>
+        <input type="hidden" id="c-nombre">
         <div class="fg"><label>Número de cliente</label><input type="text" id="c-num-cliente" placeholder="CLI-000001" readonly style="background:var(--s2)"></div>
         <div class="fg"><label>CURP *</label><input type="text" id="c-curp" placeholder="XXXX000000XXXXXX00" style="text-transform:uppercase"></div>
         <div class="fg"><label>RFC *</label><input type="text" id="c-rfc" placeholder="XXXX000000XXX" style="text-transform:uppercase"></div>
@@ -954,6 +958,7 @@
         <div class="fg"><label>Descuento ($)</label><input type="text" inputmode="numeric" id="c-descuento" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"></div>
         <div class="fg"><label>Pago adicional ($)</label><input type="text" inputmode="numeric" id="c-pago-adic" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"></div>
         <div class="fg"><label>Forma de pago adicional</label><select id="c-forma-pago"><option>Transferencia electrónica</option><option>SPEI</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option><option>Otro</option></select></div>
+        <div class="fg"><label>Distribución de comisión</label><select id="c-distribucion-comision" onchange="calcCierre()"></select></div>
         <div class="fg"><label>Plazo desembolso (1-12 meses)</label>
           <select id="c-plazo" onchange="calcCierre()">
             <option value="0">Contado (sin pagos)</option>
@@ -1000,7 +1005,10 @@
         <button class="btn btn-out" onclick="cierreTab(1)">← Financiero</button>
         <div style="display:flex;gap:8px">
           <button class="btn btn-out" onclick="guardarCierreCompleto()">💾 Guardar</button>
-          <button class="btn btn-green" style="font-size:14px;padding:10px 24px" onclick="registrarVentaCierre()" id="btn-descargar-cierre">✅ Contrato firmado — Registrar VENTA</button>
+          <button class="btn btn-out" onclick="generarBorradorCierre()">📝 Generar borrador</button>
+          <button class="btn btn-gold" onclick="validarContratoCierre()" id="btn-validar-contrato">✓ Validar contrato</button>
+          <button class="btn btn-navy" onclick="descargarPaqueteFirma()" id="btn-paquete-firma">⬇ Paquete para firma</button>
+          <button class="btn btn-green" onclick="confirmarFirmaCierre()" id="btn-descargar-cierre">✅ Confirmar firma y registrar VENTA</button>
         </div>
       </div>
     </div>
@@ -1275,8 +1283,10 @@
 <script src="business/comisiones.business.js"></script>
 <script src="business/oportunidades.business.js"></script>
 <script src="business/healthcheck.business.js"></script>
-<script src="business/pipeline.business.js"></script> <!-- 1.95: flujo único de estatus CRM -->
+<script src="business/pipeline.business.js"></script>
+<script src="business/cierre-lifecycle.business.js"></script> <!-- 1.95: flujo único de estatus CRM -->
 <script src="business/migraciones196.business.js"></script>
+<script src="business/migraciones197.business.js"></script>
 <script src="modules/operaciones-ui.module.js"></script> <!-- 1.95: UI del Motor de Operaciones -->
 <script src="modules/cobranza.module.js"></script>
 <script src="modules/cierre-acciones.module.js"></script>
