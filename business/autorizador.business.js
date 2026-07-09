@@ -38,6 +38,10 @@ window.AUTORIZADOR = (function(){
     gestionar_usuarios:      ['administrador'],
     // Edición de parámetros y política comercial
     editar_parametros:       ['gerente','administrador'],
+    // Validación documental: convierte borrador en paquete definitivo para firma
+    validar_contrato:         ['gerente','administrador'],
+    // Confirmar firma o cancelar paquete validado
+    confirmar_firma:          ['gerente','administrador'],
   };
 
   const ETIQUETAS = { administrador:'Administrador', gerente:'Gerente de Ventas', asesor:'Asesor Comercial' };
@@ -61,7 +65,7 @@ window.AUTORIZADOR = (function(){
   }
 
   /* Autorización con traza: audita denegaciones y permisos sensibles */
-  const SENSIBLES = ['eliminar_prospecto','cancelar_operacion','correccion_administrativa','gestionar_usuarios','editar_parametros','ajustar_fecha_apartado'];
+  const SENSIBLES = ['validar_contrato','confirmar_firma','eliminar_prospecto','cancelar_operacion','correccion_administrativa','gestionar_usuarios','editar_parametros','ajustar_fecha_apartado'];
   function autorizar(accion, ctx){
     const ok = puede(accion, ctx);
     const detalle = { accion, rol:_rol(), politica:POLITICA_VERSION, contexto:ctx||null };

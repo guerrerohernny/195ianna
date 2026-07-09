@@ -6,6 +6,7 @@
 let _docQueue = [];
 const _DOC_GENERATORS = [
   {label:'Recibo de Apartado', fn:'imprimirReciboApartado'},
+  {label:'Recibo de Pago Adicional', fn:'imprimirReciboPagoAdicional', soloSiPagoAdicional:true},
   {label:'Formato de Apartado de Vivienda', fn:'imprimirFormatoApartado'},
   {label:'Datos Generales del Solicitante', fn:'imprimirDatosGenerales'},
   {label:'Carta de Autorización de Uso de Datos', fn:'imprimirCartaAutorizacion'},
@@ -26,9 +27,9 @@ async function descargarCierreZIP(){
 
   calcCierre();
   const snap = construirSnapshotCierre();
-  const pagoAdic=(typeof registrarPagoAdicionalCierre==='function')?registrarPagoAdicionalCierre():null;
-  apartadosService.actualizar(_cierreData.ap.id,{ doc_snapshot: snap, financial_snapshot:_cierreData.financialSnapshot||null, recibo_pago_adicional:pagoAdic?.folio||null, folio_recibo: IANNA_MOTOR.asegurarFolioCierre(), cierre_generado: true });
-  if(pagoAdic?.folio) registrarDocumento(_cierreData.ap.id,'imprimirReciboPagoAdicional','Recibo de Pago Adicional');
+  const apVal=apartadosService.obtener(_cierreData.ap.id);
+  if(IANNA_CIERRE.estado(apVal)!==IANNA_CIERRE.ESTADOS.VALIDADO){toast('El paquete definitivo solo está disponible después de la validación gerencial','warn',6000);return;}
+  apartadosService.actualizar(_cierreData.ap.id,{ doc_snapshot: snap, financial_snapshot:_cierreData.financialSnapshot||null, cierre_generado: true });
   _cierreData.ap.cierre_generado = true;
   // Registrar todos los documentos del expediente
   Object.keys(DOC_LABELS).forEach(fn=>{
@@ -261,9 +262,7 @@ function imprimirDatosGenerales(){
   const {l} = _cierreData;
   const cli = getClienteData();
   const hoy = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
-  // Convención de captura: "Apellido Paterno Materno Nombre(s)"
-  const partes=(cli.nombre||'').trim().split(/\s+/);
-  const apPat=partes[0]||'', apMat=partes[1]||'', nombres=partes.slice(2).join(' ');
+  const apPat=cli.apellido_paterno||''; const apMat=cli.apellido_materno||''; const nombres=cli.nombres||cli.nombre||'';
   const cPartes=(cli.conyugeNombre||'').trim().split(/\s+/);
   const cPat=cPartes[0]||'', cMat=cPartes[1]||'', cNoms=cPartes.slice(2).join(' ');
   const rPartes=(cli.refNombre||'').trim().split(/\s+/);

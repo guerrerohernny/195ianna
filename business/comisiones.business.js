@@ -53,6 +53,11 @@ window.IANNA_COM = (function(){
         broker:          0.01,   // 1% al broker externo
       },
       // Distribución del cobro — configurable por empresa
+      distribuciones_cobro: {
+        credito: { id:'DCO-CREDITO', nombre:'Crédito hipotecario', tipo:'credito', partes:[ { parte:'firma', nombre:'Firma', evento:'contrato_firmado', pct:0.5 }, { parte:'escritura', nombre:'Escritura', evento:'escrituracion', pct:0.5 } ] },
+        contado: { id:'DCO-CONTADO', nombre:'Contado', tipo:'contado', partes:[ { parte:'firma', nombre:'Firma', evento:'contrato_firmado', pct:0.5 }, { parte:'escritura', nombre:'Escritura', evento:'escrituracion', pct:0.5 } ] },
+        especiales: []
+      },
       distribucion_asesor:  [ { parte:'firma', nombre:'Firma de contrato', evento:'contrato_firmado', pct:0.5 }, { parte:'escrituracion', nombre:'Escrituración', evento:'escrituracion', pct:0.5 } ],
       distribucion_gerente: [ { parte:'firma', nombre:'Firma de contrato', evento:'contrato_firmado', pct:0.5 }, { parte:'escrituracion', nombre:'Escrituración', evento:'escrituracion', pct:0.5 } ],
       reglas_especiales: { contado: { activa:false, porcentaje_asesor:0.025 } },
@@ -138,7 +143,18 @@ window.IANNA_COM = (function(){
   function conceptos(ap){
     if(ap && ap.financial_snapshot && ap.financial_snapshot.base_comisionable_snapshot){
       const x=ap.financial_snapshot.base_comisionable_snapshot;
-      return {...x, bruto:Number(x.bruto||x.total||0), gastos_operacion:Number(ap.financial_snapshot.total_gastos_operacion||0)};
+      // Contrato normalizado 1.97: tolera snapshots 1.96 y devuelve SIEMPRE las llaves canónicas.
+      return {
+        precio_vivienda:Number(x.precio_vivienda ?? x.vivienda ?? 0),
+        excedente_terreno:Number(x.excedente_terreno ?? x.excedente ?? 0),
+        plusvalia:Number(x.plusvalia||0),
+        fraccion_fusionada:Number(x.fraccion_fusionada||0),
+        lote_adicional:Number(x.lote_adicional||0),
+        construccion_adicional:Number(x.construccion_adicional||0),
+        adicional:Number(x.adicional||0),
+        gastos_operacion:Number(ap.financial_snapshot.total_gastos_operacion||0),
+        bruto:Number(x.bruto ?? x.valor_total_vivienda ?? x.total_bruto ?? 0)
+      };
     }
     const d=(typeof IANNA_VALOR!=='undefined') ? IANNA_VALOR.desglose(ap) : {};
     const gastos=(ap?.financial_snapshot?.gastos_operacion||[]).reduce((s,g)=>s+Number(g.monto_aplicado||0),0);
@@ -176,6 +192,27 @@ window.IANNA_COM = (function(){
      CÁLCULO DE COMISIONES
      ────────────────────────────────────────────────────────────── */
 
+  function distribucionesDisponibles(politica){
+    const p=politica||politicaActual();
+    const d=p.distribuciones_cobro||{};
+    return [d.credito,d.contado,...(d.especiales||[])].filter(Boolean);
+  }
+
+  function resolverDistribucion(ap,politica){
+    const p=politica||politicaActual();
+    const id=ap?.financial_snapshot?.distribucion_comision_id||ap?.datos_cierre?.distribucion_comision_id||'';
+    const todas=distribucionesDisponibles(p);
+    if(id){ const found=todas.find(x=>x.id===id); if(found) return found; }
+    // Compatibilidad: snapshots históricos 1.96 podían congelar únicamente distribucion_asesor.
+    if(ap?.politica_snapshot && Array.isArray(p.distribucion_asesor) && p.distribucion_asesor.length){
+      return {id:'LEGACY-SNAPSHOT',nombre:'Distribución congelada histórica',tipo:'legacy',partes:p.distribucion_asesor};
+    }
+    const tipo=String(ap?.financial_snapshot?.tipo_financiamiento||ap?.datos_cierre?.tipoCredito||'').toLowerCase();
+    if(tipo==='contado'&&p.distribuciones_cobro?.contado) return p.distribuciones_cobro.contado;
+    if(p.distribuciones_cobro?.credito) return p.distribuciones_cobro.credito;
+    return {id:'LEGACY',nombre:'Distribución vigente',tipo:'legacy',partes:p.distribucion_asesor||[]};
+  }
+
   // Comisión completa del asesor. Devuelve el desglose por partes de la distribución.
   function comisionAsesor(ap){
     const politica = ap.politica_snapshot || politicaActual();
@@ -185,7 +222,8 @@ window.IANNA_COM = (function(){
     const reglaContado=politica.reglas_especiales?.contado;
     const pct = (!esBroker && tipoFin==='contado' && reglaContado?.activa) ? Number(reglaContado.porcentaje_asesor||0) : (esBroker ? politica.porcentajes.asesor_broker : politica.porcentajes.asesor_directo);
     const total = base * pct;
-    const partes = (politica.distribucion_asesor||[]).map(p => ({ parte:p.parte, nombre:p.nombre||p.parte, evento:p.evento||p.parte, pct:Number(p.pct||0), monto: total*Number(p.pct||0) }));
+    const dist=resolverDistribucion(ap,politica);
+    const partes = (dist.partes||politica.distribucion_asesor||[]).map(p => ({ parte:p.parte, nombre:p.nombre||p.parte, evento:p.evento||p.parte, pct:Number(p.pct||0), monto: total*Number(p.pct||0) }));
     return { rol:'asesor', beneficiario_id: ap.asesor, base, porcentaje:pct, total, partes, politica_version, es_broker:esBroker, regla_especial_aplicada:(!esBroker&&tipoFin==='contado'&&reglaContado?.activa)?'contado':null };
   }
 
@@ -246,7 +284,7 @@ window.IANNA_COM = (function(){
     // Snapshot en la Operación
     snapshotDePolitica, congelarPolitica,
     // Cálculos
-    conceptos, baseComisionable, comisionAsesor, comisionGerente,
+    conceptos, baseComisionable, distribucionesDisponibles, resolverDistribucion, comisionAsesor, comisionGerente,
     // Devengo y penalización
     devengarComisiones, calcularPenalizacion,
   };

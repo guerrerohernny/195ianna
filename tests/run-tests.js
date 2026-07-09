@@ -68,6 +68,7 @@ function cargar(rel) {
   'business/comisiones.business.js',
   'business/oportunidades.business.js',
   'business/pipeline.business.js',
+  'business/cierre-lifecycle.business.js',
 ].forEach(cargar);
 
 /* usuario de pruebas (gerente por defecto) */
@@ -303,6 +304,25 @@ t('FOVISSSTE Para Todos está modelado como mixto', () => {
 t('Crédito IMSS se comporta como tradicional', () => eq(X("MASTER_PARAMS.instituciones.find(x=>x.id==='credito_imss').tipo"),'tradicional'));
 
 /* ── resumen ── */
+
+/* ── 1.97 · CICLO DOCUMENTAL Y DISTRIBUCIONES ── */
+console.log('▶ Fase 1.97 (Document Lifecycle & Commercial Controls)');
+X("var _p197=prospectosService.crear({nombre:'Cliente 197',telefono:'667 111 2233',estatus:'Apartado',asesor:'u_test'}); var _a197=apartadosService.crear({prospectoId:_p197.id,asesor:'u_test',estatus:'Activo',modelo_id:'ARAGO',clave_lote:'LOT-TEST-197',monto_enganche:50000,fecha_apartado:'2026-07-01'});");
+t('asesor puede preparar borrador pero no validar',()=>{
+  X("CU={id:'u_a197',nombre:'Asesor 197',rol:'asesor'}");
+  verdad(X("IANNA_CIERRE.guardarBorrador(_a197.id,{datos_cierre:{nombre:'Cliente 197'}}).ok"));
+  eq(X("IANNA_CIERRE.validar(_a197.id,{pagares:[]}).ok"),false);
+  X("CU={id:'u_test',nombre:'Usuario Prueba',rol:'gerente'}");
+});
+t('gerente valida y asigna folios a pagarés antes de Venta',()=>{
+  const r=X("IANNA_CIERRE.validar(_a197.id,{pagares:[{n:1,fecha:'2026-08-01',monto:100000},{n:2,fecha:'2026-09-01',monto:100000}],pago_adicional:50000,forma_pago_adicional:'Transferencia',doc_snapshot:{},financial_snapshot:{tipo_financiamiento:'credito'},datos_cierre:{nombre:'Cliente 197'},politica_snapshot:IANNA_COM.snapshotDePolitica(_a197)})");
+  verdad(r.ok); eq(r.pagares.length,2); verdad(r.pagares[0].folio!==r.pagares[1].folio);
+  eq(X("apartadosService.obtener(_a197.id).estatus"),'Activo');
+  eq(X("IANNA_CIERRE.estado(apartadosService.obtener(_a197.id))"),'VALIDADO_PENDIENTE_FIRMA');
+});
+t('pago adicional no entra al ledger hasta confirmar firma',()=>{ eq(X("IANNA_FIN.ingresosNetosOperacion(_a197.id)"),0); const r=X("IANNA_CIERRE.confirmarFirma(_a197.id)"); verdad(r.ok); eq(X("IANNA_FIN.ingresosNetosOperacion(_a197.id)"),50000); });
+t('distribuciones disponibles incluyen crédito y contado',()=>{ const n=X("IANNA_COM.distribucionesDisponibles(IANNA_COM.politicaDefault()).map(x=>x.tipo)"); verdad(n.includes('credito')&&n.includes('contado')); });
+
 console.log('\n═════════════════════════════════════');
 console.log(`RESULTADO: ${ok} pasaron · ${mal} fallaron`);
 if (mal) { console.log('\nFallas:\n - ' + fallas.join('\n - ')); process.exit(1); }

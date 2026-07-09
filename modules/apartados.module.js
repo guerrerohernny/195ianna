@@ -17,13 +17,16 @@ function renderApartados(){
   } else {
     list=list.filter(a=>a.estatus!=='Cancelado'&&a.estatus!=='Venta Cancelada');
   }
-  const total=list.reduce((s,a)=>s+(a.monto_enganche||0),0);
-  const activos=list.filter(a=>a.estatus==='Activo').length;
-  const ventas=list.filter(a=>a.estatus==='Venta').length;
+  const activosList=list.filter(a=>a.estatus==='Activo');
+  const activos=activosList.length; const hoy=new Date();
+  const valorComprometido=activosList.reduce((sum,a)=>sum+Number(a.valor_operacion||0),0);
+  const porVencer=activosList.filter(a=>{ if(!a.fecha_vencimiento)return false; const d=(new Date(a.fecha_vencimiento)-hoy)/86400000; return d>=0&&d<=7; }).length;
+  const vencidos=activosList.filter(a=>a.fecha_vencimiento&&new Date(a.fecha_vencimiento)<hoy).length;
   $('ap-kpi').innerHTML=[
-    {lbl:'Total apartados',val:list.length,sub:'Registrados'},
-    {lbl:'Enganches recibidos',val:mxn(total),sub:'Acumulado'},
-    {lbl:'Convertidos a venta',val:ventas,sub:`${activos} activos`},
+    {lbl:'Apartados activos',val:activos,sub:'Vigentes'},
+    {lbl:'Valor comprometido',val:mxn(valorComprometido),sub:'Inventario apartado'},
+    {lbl:'Por vencer',val:porVencer,sub:'Próximos 7 días'},
+    {lbl:'Vencidos',val:vencidos,sub:'Requieren atención'},
   ].map(k=>`<div class="kpi-card"><div class="kpi-lbl">${k.lbl}</div><div class="kpi-val" style="font-size:20px">${k.val}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
   const tb=$('ap-tbody');
   if(!list.length){ tb.innerHTML=`<tr><td colspan="9"><div class="empty"><div class="empty-i">📋</div><p>Sin apartados registrados.</p></div></td></tr>`; return; }
@@ -44,7 +47,7 @@ function renderApartados(){
       <td><span class="badge" style="background:${sc}18;color:${sc}"><span class="bdot" style="background:${sc}"></span>${a.estatus}</span></td>
       <td style="white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-navy btn-xs" onclick="abrirOperaciones('${a.id}')">⚙ Operaciones</button>
-        ${a.estatus==='Activo'?`<button class="btn btn-gold btn-xs" onclick="generarCierre('${a.id}')">📄 Cierre</button>`:''}
+        ${a.estatus==='Activo'?`<button class="btn btn-gold btn-xs" onclick="generarCierre('${a.id}')">📄 Cierre</button>${AUTORIZADOR.puede('ver_global')?`<button class="btn btn-out btn-xs" onclick="refrendarApartado('${a.id}')">↻ Refrendar</button>`:''}`:''}
         ${a.estatus==='Venta'?`<button class="btn btn-gold btn-xs" onclick="abrirCobranzaVenta('${a.id}')">💰 Cobranza</button>`:''}
         ${a.estatus==='Venta Cancelada'?`<span style="font-size:10px;color:#dc2626">Cancelada</span>`:''}
       </td>
@@ -115,6 +118,7 @@ function onModeloChange(){
   if(!mid){ $('ap-modelo-ficha').style.display='none'; return; }
   const m=getMod(mid); if(!m) return;
   $('ap-modelo-ficha').style.display='block';
+  if(m.id==='SOLO_TERRENO') m.desc='Solo terreno — precio vigente: '+mxn(getP().precio_m2_solo)+'/m²';
   // Superficie mínima por modelo
   const SURF_MIN={MORELLO:126,AMBEL:144,ARAGO:144,MIRAMBEL:144,BERDUN:144};
   const supMin=SURF_MIN[m.id]||0;
@@ -235,7 +239,7 @@ function saveApartado(){
   const adClaveVal=$('ap-lote-adic')?.value;
   const adActivo=$('ap-lote-adic-sel')?.style.display!=='none'&&adClaveVal;
   const editId=$('ap-lote').dataset.editId||'';
-  const ap={prospectoId,clave_lote,modelo_id,asesor:$('ap-ases').value,fecha_apartado:$('ap-fecha').value,monto_enganche:parseMoneyInput($('ap-monto').value)||50000,metodo_pago,valor_operacion,estatus:'Activo',modelo_nombre:getMod(modelo_id)?.nombre||'',construccion_adicional_desc:caDesc,construccion_adicional_m2:caM2,construccion_adicional_val:caVal,clave_lote_adicional:adActivo?adClaveVal:''};
+  const ap={prospectoId,clave_lote,modelo_id,asesor:$('ap-ases').value,fecha_apartado:$('ap-fecha').value, vigencia_dias_snapshot:Number(getP().vigencia_apartado_dias||15), fecha_vencimiento:(()=>{const d=new Date($('ap-fecha').value+'T12:00:00');d.setDate(d.getDate()+Number(getP().vigencia_apartado_dias||15));return d.toISOString().slice(0,10)})(),monto_enganche:parseMoneyInput($('ap-monto').value)||50000,metodo_pago,valor_operacion,estatus:'Activo',modelo_nombre:getMod(modelo_id)?.nombre||'',construccion_adicional_desc:caDesc,construccion_adicional_m2:caM2,construccion_adicional_val:caVal,clave_lote_adicional:adActivo?adClaveVal:''};
 
   if(editId){
     // EDITAR: actualizar registro existente, no crear uno nuevo
@@ -446,3 +450,12 @@ function _ejecutarContratoFirmado(aid){
   toast('¡Venta registrada! 🎉','ok');
 }
 
+
+function refrendarApartado(aid){
+  const ap=apartadosService.obtener(aid); if(!ap)return;
+  const dias=Number(prompt('¿Cuántos días adicionales deseas agregar?',String(getP().vigencia_apartado_dias||15))||0); if(dias<=0)return;
+  const base=new Date((ap.fecha_vencimiento||ap.fecha_apartado)+'T12:00:00'); base.setDate(base.getDate()+dias);
+  const ref={id_publico:IANNA_IDS.asignar('operacion'),fecha:new Date().toISOString(),dias_adicionales:dias,nueva_fecha_vencimiento:base.toISOString().slice(0,10),usuario:CU.id};
+  apartadosService.actualizar(aid,{fecha_vencimiento:ref.nueva_fecha_vencimiento,refrendos:[...(ap.refrendos||[]),ref]});
+  toast('Apartado refrendado hasta '+ref.nueva_fecha_vencimiento,'ok'); renderApartados();
+}

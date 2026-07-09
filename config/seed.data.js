@@ -86,7 +86,7 @@ const MASTER_INV = [
 ];
 
 const MASTER_MOD = [
-  {id:"SOLO_TERRENO",nombre:"Solo Terreno",precio:0,construccion:0,recamaras:0,banos:0,desc:"Solo terreno — precio: m² × $14,500 MXN",activo:true},
+  {id:"SOLO_TERRENO",nombre:"Solo Terreno",precio:0,construccion:0,recamaras:0,banos:0,desc:"Solo terreno — precio dinámico según Parámetros",activo:true},
   {id:"MORELLO",nombre:"Morello",precio:3500000,construccion:142.62,recamaras:3,banos:2.5,desc:"Casa 3 rec, lote 7×18 (126 m²), diseño compacto",activo:true},
   {id:"AMBEL",nombre:"Ambel",precio:4050000,construccion:173.05,recamaras:3,banos:3.5,desc:"Casa 3 rec, lote 8×18 (144 m²), sala-comedor-cocina",activo:true},
   {id:"ARAGO",nombre:"Aragó",precio:4360000,construccion:194.4,recamaras:3,banos:3.5,desc:"Casa 3 rec, lote 8×18 (144 m²), mayor superficie",activo:true},
@@ -96,6 +96,7 @@ const MASTER_MOD = [
 
 const MASTER_PARAMS = {
   precio_m2_solo: 14500,
+  vigencia_apartado_dias: 15,
   precio_m2_exc: 9000,
   precio_m2_lote_adicional: 13000,
   // Gastos de operación — parametrizables

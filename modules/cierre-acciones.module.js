@@ -6,28 +6,46 @@
 function registrarPagoAdicionalCierre(){
   if(!_cierreData) return null;
   const monto=Number(_cierreData.pagoAdic||0); if(monto<=0) return null;
-  const ap=_cierreData.ap; const ref='PAGO-ADICIONAL:'+ap.id;
-  const folio=IANNA_FOLIOS.emitirUnaVez('recibo_pago_adicional',ref);
-  const doc=IANNA_FMT.FOLIO(folio);
-  const r=IANNA_FIN.ajustarIngresoDocumentado({operacionId:ap.id,personaId:ap.prospectoId,monto,metodo:$('c-forma-pago')?.value||'Transferencia electrónica',documento:doc,concepto:'Pago adicional',politica_version:(ap.politica_snapshot||{}).version||IANNA_COM.politicaActual().version,motivo:'Pago adicional registrado/ajustado desde cierre'});
-  return {movimiento:r.movimiento,folio,ajuste:r};
+  return {monto,metodo:$('c-forma-pago')?.value||'Transferencia electrónica',estado:'PENDIENTE_VALIDACION'};
 }
 
 // Contrato firmado: guarda el cierre completo, registra los documentos en el expediente y convierte a VENTA
-function registrarVentaCierre(){
-  if(!_cierreData) return;
-  const curp=$('c-curp').value.trim();
-  if(!guardarCierreCompleto(true)) return;
-  if(!curp){ toast('Captura el CURP del cliente para cerrar la venta','err'); cierreTab(0); return; }
-  apartadosService.actualizar(_cierreData.ap.id,{cierre_generado:true});
-  Object.keys(DOC_LABELS).forEach(fn=>{
-    if(fn==='imprimirPagares'&&!(_cierreData.pagares&&_cierreData.pagares.length)) return;
-    registrarDocumento(_cierreData.ap.id, fn, DOC_LABELS[fn]);
-  });
-  const apId=_cierreData.ap.id;
-  convertirVenta(apId);
-  const ap2=DS.findOne('apartados',apId);
-  if(ap2&&ap2.estatus==='Venta'){ closeM('m-cierre'); }
+function generarBorradorCierre(){
+  if(!_cierreData)return;
+  if(!guardarCierreCompleto(true))return;
+  const ap=apartadosService.obtener(_cierreData.ap.id);
+  const r=IANNA_CIERRE.guardarBorrador(ap.id,{datos_cierre:getClienteData(),doc_snapshot:construirSnapshotCierre(),financial_snapshot:_cierreData.financialSnapshot||null});
+  if(!r.ok){toast(r.error,'err');return;} toast('Borrador generado. Pendiente de revisión gerencial.','ok',5000); updateCierreWorkflowUI();
+}
+function validarContratoCierre(){
+  if(!_cierreData)return;
+  if(!AUTORIZADOR.puede('validar_contrato')){toast('Solo Gerencia puede validar el contrato','err');return;}
+  if(!guardarCierreCompleto(true))return;
+  const ap=apartadosService.obtener(_cierreData.ap.id); if(IANNA_CIERRE.estado(ap)==='PREPARACION') IANNA_CIERRE.guardarBorrador(ap.id,{datos_cierre:getClienteData(),doc_snapshot:construirSnapshotCierre(),financial_snapshot:_cierreData.financialSnapshot||null});
+  const r=IANNA_CIERRE.validar(ap.id,{pagares:_cierreData.pagares,pago_adicional:_cierreData.pagoAdic,forma_pago_adicional:$('c-forma-pago')?.value||'',doc_snapshot:construirSnapshotCierre(),financial_snapshot:_cierreData.financialSnapshot||null,datos_cierre:getClienteData(),politica_snapshot:IANNA_COM.snapshotDePolitica(ap)});
+  if(!r.ok){toast(r.error||r.justificacion,'err');return;}
+  if(r.recibo) registrarDocumento(ap.id,'imprimirReciboPagoAdicional','Recibo de Pago Adicional');
+  toast('Contrato validado. Folios asignados y paquete disponible para firma.','ok',6000); updateCierreWorkflowUI();
+}
+function descargarPaqueteFirma(){
+  if(!_cierreData)return; const ap=apartadosService.obtener(_cierreData.ap.id);
+  if(IANNA_CIERRE.estado(ap)!==IANNA_CIERRE.ESTADOS.VALIDADO){toast('El contrato debe ser validado por Gerencia antes de descargar el paquete para firma','warn',6000);return;}
+  descargarCierreZIP();
+}
+function confirmarFirmaCierre(){
+  if(!_cierreData)return; const apId=_cierreData.ap.id;
+  const r=IANNA_CIERRE.confirmarFirma(apId); if(!r.ok){toast(r.error||r.justificacion,'err');return;}
+  apartadosService.actualizar(apId,{cierre_generado:true});
+  convertirVenta(apId); const ap2=apartadosService.obtener(apId);
+  if(ap2&&ap2.estatus==='Venta'){toast('Firma confirmada. Venta registrada y cobranza activada.','ok',6000);closeM('m-cierre');}
+}
+function registrarVentaCierre(){ return confirmarFirmaCierre(); }
+function updateCierreWorkflowUI(){
+  if(!_cierreData)return; const ap=apartadosService.obtener(_cierreData.ap.id); const st=IANNA_CIERRE.estado(ap);
+  const vb=$('btn-validar-contrato'), pb=$('btn-paquete-firma'), fb=$('btn-descargar-cierre');
+  if(vb) vb.style.display=AUTORIZADOR.puede('validar_contrato')&&['BORRADOR','CORRECCION'].includes(st)?'':'none';
+  if(pb) pb.style.display=st===IANNA_CIERRE.ESTADOS.VALIDADO?'':'none';
+  if(fb) fb.style.display=AUTORIZADOR.puede('confirmar_firma')&&st===IANNA_CIERRE.ESTADOS.VALIDADO?'':'none';
 }
 
 // Guardar todo el cierre (datos del cliente + snapshot) sin abrir documentos
@@ -40,9 +58,7 @@ function guardarCierreCompleto(silencioso){
   const snap=construirSnapshotCierre();
   const esVentaCorr=(DS.findOne('apartados',_cierreData.ap.id)?.estatus==='Venta');
   const antesCorr=esVentaCorr?(DS.findOne('apartados',_cierreData.ap.id).datos_cierre||{}):null;
-  const pagoAdic=registrarPagoAdicionalCierre();
-  apartadosService.actualizar(_cierreData.ap.id,{ datos_cierre:getClienteData(), doc_snapshot:snap, financial_snapshot:_cierreData.financialSnapshot||null, recibo_pago_adicional:pagoAdic?.folio||null, folio_recibo:IANNA_MOTOR.asegurarFolioCierre() });
-  if(pagoAdic?.folio) registrarDocumento(_cierreData.ap.id,'imprimirReciboPagoAdicional','Recibo de Pago Adicional');
+  apartadosService.actualizar(_cierreData.ap.id,{ datos_cierre:getClienteData(), doc_snapshot:snap, financial_snapshot:_cierreData.financialSnapshot||null });
   if(esVentaCorr) IANNA_MOTOR.auditar('apartados',_cierreData.ap.id,'CORRECCION_ADMINISTRATIVA',{datos_cierre:antesCorr},{datos_cierre:getClienteData()},'Guardado sobre venta cerrada (edición habilitada)');
   if(!silencioso) toast('Datos del cierre guardados ✓','ok');
   return true;
@@ -58,9 +74,7 @@ function abrirDocCierre(fn){
   if(fn==='imprimirPagares'&&!(_cierreData.pagares&&_cierreData.pagares.length)){ toast('Esta operación no tiene pagarés (contado)','warn'); return; }
   calcCierre();
   const snap=construirSnapshotCierre();
-  const pagoAdic=registrarPagoAdicionalCierre();
-  apartadosService.actualizar(_cierreData.ap.id,{ datos_cierre:getClienteData(), doc_snapshot:snap, financial_snapshot:_cierreData.financialSnapshot||null, recibo_pago_adicional:pagoAdic?.folio||null, folio_recibo:IANNA_MOTOR.asegurarFolioCierre(), cierre_generado:true });
-  if(pagoAdic?.folio) registrarDocumento(_cierreData.ap.id,'imprimirReciboPagoAdicional','Recibo de Pago Adicional');
+  apartadosService.actualizar(_cierreData.ap.id,{ datos_cierre:getClienteData(), doc_snapshot:snap, financial_snapshot:_cierreData.financialSnapshot||null, cierre_generado:true });
   _cierreData.ap.cierre_generado=true;
   registrarDocumento(_cierreData.ap.id, fn, DOC_LABELS[fn]);
   try{ window[fn](); }catch(e){ console.error('Error generando',fn,e); toast('Error al generar el documento','err'); return; }

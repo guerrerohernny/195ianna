@@ -9,7 +9,7 @@
 function renderParametros(){
   const P=getP();
   try{ renderPoliticaComercial(); }catch(e){ console.error('renderPoliticaComercial',e); }
-  $('pm-solo').value=P.precio_m2_solo||14500;
+  $('pm-solo').value=P.precio_m2_solo||14500; if($('pm-vigencia-apartado')) $('pm-vigencia-apartado').value=P.vigencia_apartado_dias||15;
   $('pm-exc').value=P.precio_m2_exc||9000;
   $('pm-adic').value=P.precio_m2_lote_adicional||13000;
   $('pm-esq').value=P.plus_esquina||50000;
@@ -91,13 +91,13 @@ function addModeloRow(){
   modelosService.guardar(mods); renderModelosTable();
 }
 function saveParametros(){
-  parametrosService.guardar({precio_m2_solo:parseFloat($('pm-solo').value)||14500,precio_m2_exc:parseFloat($('pm-exc').value)||9000,precio_m2_lote_adicional:parseFloat($('pm-adic').value)||13500,plus_esquina:parseFloat($('pm-esq').value)||50000,plus_parque:parseFloat($('pm-pq').value)||50000,plus_esq_pq:parseFloat($('pm-ep').value)||75000,desarrollo:$('pm-dev').value.trim(),empresa:$('pm-emp').value.trim(),gerente:$('pm-ger').value.trim(),asesor_default:$('pm-ases').value.trim()});
+  parametrosService.guardar({precio_m2_solo:parseFloat($('pm-solo').value)||14500,vigencia_apartado_dias:parseInt($('pm-vigencia-apartado')?.value)||15,precio_m2_exc:parseFloat($('pm-exc').value)||9000,precio_m2_lote_adicional:parseFloat($('pm-adic').value)||13500,plus_esquina:parseFloat($('pm-esq').value)||50000,plus_parque:parseFloat($('pm-pq').value)||50000,plus_esq_pq:parseFloat($('pm-ep').value)||75000,desarrollo:$('pm-dev').value.trim(),empresa:$('pm-emp').value.trim(),gerente:$('pm-ger').value.trim(),asesor_default:$('pm-ases').value.trim()});
   toast('Parámetros guardados ✓ — todo el sistema actualizado','ok');
 }
 
 
 // ══ FASE 1.9: Política Comercial editable desde Parámetros ══════
-let _distDraft={asesor:[],gerente:[]};
+let _distDraft={asesor:[],gerente:[]}; let _cobroDistDraft={credito:null,contado:null,especiales:[]};
 function renderPoliticaComercial(){
   const pol = IANNA_COM.politicaActual();
   $('pc-version').textContent = pol.version;
@@ -113,9 +113,8 @@ function renderPoliticaComercial(){
   $('pc-pct-bk').value = (pol.porcentajes.broker*100).toFixed(3);
   $('pc-contado-act').checked=!!pol.reglas_especiales?.contado?.activa;
   $('pc-contado-pct').value=((pol.reglas_especiales?.contado?.porcentaje_asesor||0.025)*100).toFixed(3);
-  _distDraft.asesor=JSON.parse(JSON.stringify(pol.distribucion_asesor||[]));
-  _distDraft.gerente=JSON.parse(JSON.stringify(pol.distribucion_gerente||[]));
-  renderDistRows('asesor'); renderDistRows('gerente');
+  _distDraft.asesor=JSON.parse(JSON.stringify(pol.distribucion_asesor||[])); _distDraft.gerente=JSON.parse(JSON.stringify(pol.distribucion_gerente||[]));
+  const d=pol.distribuciones_cobro||IANNA_COM.politicaDefault().distribuciones_cobro; _cobroDistDraft=JSON.parse(JSON.stringify(d)); renderCobroDistribuciones();
   $('pc-pen-apt').value = (((pol.penalizaciones?.cancelacion_apartado?.valor)||0)*100).toFixed(2);
   $('pc-pen-ven').value = (((pol.penalizaciones?.cancelacion_venta?.valor)||0)*100).toFixed(2);
 }
@@ -128,7 +127,7 @@ function removeDist(tipo,i){ _distDraft[tipo].splice(i,1); renderDistRows(tipo);
 function updateDist(tipo,i,campo,val){ if(campo==='pct') _distDraft[tipo][i].pct=(parseFloat(val)||0)/100; else _distDraft[tipo][i][campo]=val; }
 function _validarDist(arr,nombre){ const sum=(arr||[]).reduce((s,x)=>s+Number(x.pct||0),0); if(Math.abs(sum-1)>0.0001){ toast(`La distribución de ${nombre} debe sumar 100%`,'err'); return false; } return true; }
 function guardarPoliticaComercial(){
-  if(!_validarDist(_distDraft.asesor,'asesor')||!_validarDist(_distDraft.gerente,'gerente')) return;
+  if(!_validarCobroDist()) return;
   const nueva = {
     base_comisionable: {
       precio_vivienda:$('pc-bc-viv').checked, excedente_terreno:$('pc-bc-exc').checked, plusvalia:$('pc-bc-plus').checked,
@@ -137,7 +136,7 @@ function guardarPoliticaComercial(){
     },
     aplicar_descuento:$('pc-desc').checked,
     porcentajes:{ asesor_directo:(parseFloat($('pc-pct-ad').value)||0)/100, asesor_broker:(parseFloat($('pc-pct-ab').value)||0)/100, gerente:(parseFloat($('pc-pct-ge').value)||0)/100, broker:(parseFloat($('pc-pct-bk').value)||0)/100 },
-    distribucion_asesor:JSON.parse(JSON.stringify(_distDraft.asesor)), distribucion_gerente:JSON.parse(JSON.stringify(_distDraft.gerente)),
+    distribucion_asesor:JSON.parse(JSON.stringify(_cobroDistDraft.credito?.partes||[])), distribucion_gerente:JSON.parse(JSON.stringify(_cobroDistDraft.credito?.partes||[])), distribuciones_cobro:JSON.parse(JSON.stringify(_cobroDistDraft)),
     reglas_especiales:{contado:{activa:$('pc-contado-act').checked,porcentaje_asesor:(parseFloat($('pc-contado-pct').value)||0)/100}},
     penalizaciones:{ cancelacion_apartado:{tipo:'porcentaje',valor:(parseFloat($('pc-pen-apt').value)||0)/100,exhibiciones:1,retencion_comisiones:false}, cancelacion_venta:{tipo:'porcentaje',valor:(parseFloat($('pc-pen-ven').value)||0)/100,exhibiciones:1,retencion_comisiones:false,distribucion:[]} }
   };
@@ -163,3 +162,14 @@ function _renderParamSistema(){
     ['Movimientos en el Ledger',movs+' (inmutable, append-only)'],
   ].map(r=>`<div><b>${r[0]}:</b> ${r[1]}</div>`).join('');
 }
+
+function renderCobroDistribuciones(){
+  ['credito','contado'].forEach(tipo=>{ const el=$('pc-dist-'+tipo); if(!el)return; const dist=_cobroDistDraft[tipo]; el.innerHTML=(dist?.partes||[]).map((x,i)=>`<div style="display:grid;grid-template-columns:1.4fr .7fr 34px;gap:6px;margin:6px 0"><input value="${x.nombre||''}" oninput="updateCobroDist('${tipo}',${i},'nombre',this.value)"><input type="number" step="0.001" value="${(Number(x.pct||0)*100).toFixed(3)}" oninput="updateCobroDist('${tipo}',${i},'pct',this.value)"><button type="button" class="btn btn-red btn-xs" onclick="removeCobroDist('${tipo}',${i})">×</button></div>`).join(''); });
+  const e=$('pc-dist-especiales'); if(e)e.innerHTML=(_cobroDistDraft.especiales||[]).map((d,di)=>`<div class="card" style="padding:10px;margin:8px 0"><div style="display:flex;gap:8px;align-items:center"><input value="${d.nombre}" oninput="_cobroDistDraft.especiales[${di}].nombre=this.value" style="flex:1"><button class="btn btn-red btn-xs" onclick="_cobroDistDraft.especiales.splice(${di},1);renderCobroDistribuciones()">Eliminar</button></div>${(d.partes||[]).map((x,i)=>`<div style="display:grid;grid-template-columns:1.4fr .7fr 34px;gap:6px;margin-top:6px"><input value="${x.nombre}" oninput="updateEspecialDist(${di},${i},'nombre',this.value)"><input type="number" value="${(x.pct*100).toFixed(3)}" oninput="updateEspecialDist(${di},${i},'pct',this.value)"><button class="btn btn-red btn-xs" onclick="_cobroDistDraft.especiales[${di}].partes.splice(${i},1);renderCobroDistribuciones()">×</button></div>`).join('')}<button class="btn btn-out btn-xs" onclick="_cobroDistDraft.especiales[${di}].partes.push({parte:'parte_'+Date.now(),nombre:'Nueva parte',evento:'manual',pct:0});renderCobroDistribuciones()">+ Parte</button></div>`).join('');
+}
+function addCobroDistRow(tipo){ _cobroDistDraft[tipo].partes.push({parte:'parte_'+Date.now(),nombre:'Nueva parte',evento:'manual',pct:0}); renderCobroDistribuciones(); }
+function removeCobroDist(tipo,i){ _cobroDistDraft[tipo].partes.splice(i,1); renderCobroDistribuciones(); }
+function updateCobroDist(tipo,i,campo,val){ _cobroDistDraft[tipo].partes[i][campo]=campo==='pct'?(parseFloat(val)||0)/100:val; }
+function addDistribucionEspecial(){ _cobroDistDraft.especiales.push({id:'DCO-ESP-'+Date.now(),nombre:'Nueva distribución especial',tipo:'especial',partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:1}]}); renderCobroDistribuciones(); }
+function updateEspecialDist(di,i,campo,val){ _cobroDistDraft.especiales[di].partes[i][campo]=campo==='pct'?(parseFloat(val)||0)/100:val; }
+function _validarCobroDist(){ const ds=[_cobroDistDraft.credito,_cobroDistDraft.contado,...(_cobroDistDraft.especiales||[])]; for(const d of ds){ const sum=(d.partes||[]).reduce((s,x)=>s+Number(x.pct||0),0); if(Math.abs(sum-1)>0.0001){toast('La distribución "'+d.nombre+'" debe sumar 100%','err');return false;} } return true; }

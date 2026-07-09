@@ -1,3 +1,4 @@
+function syncNombreCierre(){ const n=[$('c-nombres')?.value,$('c-apellido-paterno')?.value,$('c-apellido-materno')?.value].filter(Boolean).join(' ').replace(/\s+/g,' ').trim(); if($('c-nombre')) $('c-nombre').value=n; return n; }
 /* ════════════════════════════════════════════════════════════════
    IANNA CRM — modules/cierre.module.js
    Módulo Cierre: captura de cliente, corrida financiera, pagarés, vista previa.
@@ -41,7 +42,7 @@ function generarCierre(aid){
   // Pre-fill client data from prospecto
   const _ecMap={'Soltero':'Soltero(a)','Casado':'Casado(a)','Divorciado':'Divorciado','Viudo':'Viudo(a)','Unión libre':'Unión libre'};
   if(p){
-    $('c-nombre').value = p.nombre||'';
+    $('c-nombres').value = p.nombre||''; $('c-apellido-paterno').value=''; $('c-apellido-materno').value=''; syncNombreCierre();
     $('c-cel').value = p.telefono||'';
     $('c-email').value = p.correo||'';
     $('c-estado-civil').value = _ecMap[p.estadoCivil]||p.estadoCivil||'Soltero(a)';
@@ -55,7 +56,7 @@ function generarCierre(aid){
   // Si ya existe un cierre previo guardado para este apartado, restaurar TODOS los campos
   const dc = ap.datos_cierre;
   if(dc){
-    $('c-nombre').value = dc.nombre||$('c-nombre').value;
+    $('c-nombres').value=dc.nombres||dc.nombre||$('c-nombres').value; $('c-apellido-paterno').value=dc.apellido_paterno||''; $('c-apellido-materno').value=dc.apellido_materno||''; syncNombreCierre();
     $('c-curp').value = dc.curp||'';
     $('c-rfc').value = dc.rfc||'';
     $('c-nacimiento').value = dc.nacimiento||'';
@@ -169,8 +170,10 @@ function generarCierre(aid){
   ['cierre-tab-0','cierre-tab-1'].forEach(tid=>{ const t=$(tid); if(t&&t.querySelectorAll) t.querySelectorAll('input,select,textarea').forEach(el=>el.disabled=false); });
   const _ub=$('btn-cierre-unlock'); if(_ub) _ub.style.display='none';
   const _bv=$('btn-descargar-cierre'); if(_bv) _bv.style.display = (DS.findOne('apartados',aid)?.estatus==='Venta')?'none':'';
+  renderDistribucionesCierre();
   cierreTab(0);
   openM('m-cierre');
+  if(typeof updateCierreWorkflowUI==='function') updateCierreWorkflowUI();
 }
 
 
@@ -351,9 +354,9 @@ function calcCierre(){
     credito_pct:_cierreData.creditoPct, credito_monto:credito,
     componente_publico_tipo:inst.componente_publico||'', componente_publico_monto:_cierreData.componentePublicoMonto,
     complemento_bancario:_cierreData.complementoBancario, desembolso:vDesembolso,
-    base_comisionable:comCalc.base, base_snapshot:{...IANNA_VALOR.desglose(apCalc),descuento,bruto:vTotalVivienda,total:comCalc.base}, politica_version:comCalc.politica_version,
+    base_comisionable:comCalc.base, base_snapshot:(()=>{const d=IANNA_VALOR.desglose(apCalc);return {precio_vivienda:d.vivienda,excedente_terreno:d.excedente,fraccion_fusionada:d.fraccion_fusionada,lote_adicional:d.lote_adicional,construccion_adicional:d.construccion_adicional,plusvalia:d.plusvalia,descuento,bruto:vTotalVivienda,total:comCalc.base};})(), politica_version:comCalc.politica_version,
     regla_especial_aplicada:comCalc.regla_especial_aplicada, porcentaje_comision:comCalc.porcentaje,
-    distribucion_comision:comCalc.partes
+    distribucion_comision_id:$('c-distribucion-comision')?.value||'', distribucion_comision:comCalc.partes
   });
 
   if($('c-complemento')) $('c-complemento').textContent = inst.tipo==='mixto' ? ('Complemento bancario: '+IANNA_FMT.MXN(_cierreData.complementoBancario)) : '';
@@ -404,7 +407,7 @@ function calcCierre(){
 function updateCierrePreview(){
   if(!_cierreData) return;
   const {ap,l,m,numCliente,folio,vTotalVivienda,vTotalOp,vDesembolso,pagares,plazo} = _cierreData;
-  const nombre = $('c-nombre').value||'—';
+  const nombre = syncNombreCierre()||'—';
   $('cierre-preview-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12.5px">
       <div><b>Cliente:</b> ${nombre}</div>
@@ -422,7 +425,7 @@ function updateCierrePreview(){
 
 function recolectarDatosCierreForm(){
   return {
-    nombre: $('c-nombre').value.trim(),
+    nombre: syncNombreCierre(), nombres:$('c-nombres')?.value.trim()||'', apellido_paterno:$('c-apellido-paterno')?.value.trim()||'', apellido_materno:$('c-apellido-materno')?.value.trim()||'',
     curp: $('c-curp').value.trim(),
     rfc: $('c-rfc').value,
     nacimiento: $('c-nacimiento').value,
@@ -463,3 +466,12 @@ function recolectarDatosCierreForm(){
 
 
 
+
+function renderDistribucionesCierre(){
+  const sel=$('c-distribucion-comision'); if(!sel)return;
+  const pol=IANNA_COM.politicaActual(); const opts=IANNA_COM.distribucionesDisponibles(pol);
+  const inst=IANNA_VALOR.institucion($('c-institucion')?.value)||{tipo:'contado'};
+  const prev=sel.value; sel.innerHTML=opts.map(x=>`<option value="${x.id}">${x.nombre}</option>`).join('');
+  const recomendado=inst.tipo==='contado'?pol.distribuciones_cobro?.contado?.id:pol.distribuciones_cobro?.credito?.id;
+  sel.value=(prev&&opts.some(x=>x.id===prev))?prev:(recomendado||opts[0]?.id||'');
+}
