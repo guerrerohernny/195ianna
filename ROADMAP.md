@@ -196,3 +196,8 @@ Flujo documental con aprobación gerencial, folios antes de firma, distribucione
 
 ## Fase 1.97.1 — Operational Consistency Patch ✅
 Control global, multi-oportunidad, comisiones matriciales, coherencia del cierre y correcciones UX.
+
+
+## Fase 1.97.2 — UI & Commission Logic Stabilization
+
+Estado: Entregada. Corrige navegación, modelo físico asignado, ventas históricas, Control de Operaciones con apertura documental y Motor de Comisiones v3 por Captación + Distribución temporal.

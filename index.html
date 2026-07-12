@@ -52,6 +52,7 @@
       <div class="nav-i" data-page="prospectos" onclick="navTo('prospectos',this)"><span class="ni">👥</span>Prospectos</div>
       <div class="nav-i" data-page="inventario" onclick="navTo('inventario',this)"><span class="ni">🏠</span>Inventario</div>
       <div class="nav-i" data-page="apartados" onclick="navTo('apartados',this)"><span class="ni">📋</span>Apartados</div>
+      <div class="nav-i nav-admin" data-page="control-operaciones" onclick="navTo('control-operaciones',this)"><span class="ni">🧾</span>Control de Operaciones</div>
       <div class="nav-i" data-page="ingresos" onclick="navTo('ingresos',this)"><span class="ni">💰</span>Mis Ingresos</div>
       <div class="nav-i" data-page="cotizador" onclick="navTo('cotizador',this)"><span class="ni">🧮</span>Cotizador</div>
       <div class="nav-i" data-page="whatsapp" onclick="navTo('whatsapp',this)"><span class="ni">💬</span>WhatsApp CRM</div>
@@ -63,7 +64,6 @@
       <div class="nav-i" data-page="brokers" onclick="navTo('brokers',this)"><span class="ni">🤝</span>Mis Brokers</div>
       <div class="nav-i nav-admin" data-page="configuracion" onclick="navTo('configuracion',this)"><span class="ni">🔧</span>Configuración</div>
       <div class="nav-i nav-admin" data-page="auditoria" onclick="navTo('auditoria',this)"><span class="ni">🔍</span>Auditoría</div>
-      <div class="nav-i nav-admin" data-page="control-operaciones" onclick="navTo('control-operaciones',this)"><span class="ni">🧾</span>Control de Operaciones</div>
     </nav>
     <div class="sb-ft"><div class="sb-out" onclick="doLogout()">🚪 Cerrar sesión</div></div>
   </aside>
@@ -242,7 +242,7 @@
     <div class="page" id="page-control-operaciones">
       <div class="sechdr"><div><div class="sectl">Control de Operaciones</div><div class="secst">Trazabilidad global de entidades, documentos y movimientos</div></div></div>
       <div class="fbar"><div class="fsrch"><span>🔎</span><input id="co-search" placeholder="REC-000001, APT-000001, cliente, ubicación…" oninput="renderControlOperaciones()"></div><select class="fsel" id="co-tipo" onchange="renderControlOperaciones()"><option value="">Todos</option><option value="operacion">Operaciones</option><option value="documento">Documentos</option><option value="financiero">Financieros</option><option value="auditoria">Auditoría</option></select></div>
-      <div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Fecha</th><th>ID</th><th>Tipo</th><th>Cliente</th><th>Ubicación</th><th>Estado</th><th>Importe</th></tr></thead><tbody id="co-tbody"></tbody></table></div></div>
+      <div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Fecha</th><th>ID</th><th>Tipo</th><th>Cliente</th><th>Ubicación</th><th>Estado</th><th>Importe</th><th>Acciones</th></tr></thead><tbody id="co-tbody"></tbody></table></div></div>
     </div>
 
     <!-- PARÁMETROS -->
@@ -307,8 +307,8 @@
           </div>
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0">
-          <div style="font-weight:700;font-size:12.5px;margin-bottom:6px">Esquemas de comisión por Modalidad × Canal</div>
-          <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px">Cada esquema define porcentajes de Asesor, Gerente y Broker, además de la distribución temporal del cobro. El Cierre resuelve primero la modalidad y después el canal de la Oportunidad.</div>
+          <div style="font-weight:700;font-size:12.5px;margin-bottom:6px">Comisiones: captación + distribución temporal</div>
+          <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px">Primero define porcentajes por fuente de captación; después define en cuántas partes se cobra la comisión. En el cierre IANNA combina ambos criterios.</div>
           <div id="pc-esquemas-comision"></div>
           <button type="button" class="btn btn-out btn-xs" onclick="addEsquemaComisionEspecial()">+ Agregar esquema especial</button>
           <details style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;color:var(--t3)">Compatibilidad: distribuciones antiguas</summary>
@@ -974,7 +974,7 @@
         <div class="fg"><label>Descuento ($)</label><input type="text" inputmode="numeric" id="c-descuento" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"></div>
         <div class="fg"><label>Pago adicional ($)</label><input type="text" inputmode="numeric" id="c-pago-adic" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"></div>
         <div class="fg"><label>Forma de pago adicional</label><select id="c-forma-pago"><option>Transferencia electrónica</option><option>Tarjeta</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option><option>Otro</option></select></div>
-        <div class="fg"><label>Distribución de comisión</label><select id="c-distribucion-comision" onchange="calcCierre()"></select></div>
+        <div class="fg"><label>Esquema de captación + distribución de cobro</label><select id="c-distribucion-comision" onchange="calcCierre()"></select></div>
         <div class="fg"><label>Plazo desembolso (1-12 meses)</label>
           <select id="c-plazo" onchange="calcCierre()">
             <option value="0">Contado (sin pagos)</option>
@@ -1306,6 +1306,7 @@
 <script src="business/migraciones196.business.js"></script>
 <script src="business/migraciones197.business.js"></script>
 <script src="business/migraciones1971.business.js"></script>
+<script src="business/migraciones1972.business.js"></script>
 <script src="modules/operaciones-ui.module.js"></script> <!-- 1.95: UI del Motor de Operaciones -->
 <script src="modules/cobranza.module.js"></script>
 <script src="modules/cierre-acciones.module.js"></script>
