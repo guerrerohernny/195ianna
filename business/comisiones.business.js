@@ -58,6 +58,19 @@ window.IANNA_COM = (function(){
         contado: { id:'DCO-CONTADO', nombre:'Contado', tipo:'contado', partes:[ { parte:'firma', nombre:'Firma', evento:'contrato_firmado', pct:0.5 }, { parte:'escritura', nombre:'Escritura', evento:'escrituracion', pct:0.5 } ] },
         especiales: []
       },
+      // Fase 1.97.2 — política matricial: primero fuente de captación, luego distribución temporal del cobro.
+      esquemas_captacion: [
+        {id:'CAP-DIRECTO',nombre:'Personal del asesor',canal:'directo',fuente:'Personal del asesor (redes, prospección en frío, canal propio)',porcentajes:{asesor:0.02,gerente:0.005,broker:0,tercero:0},tercero_tipo:''},
+        {id:'CAP-BROKER',nombre:'Bróker',canal:'broker',fuente:'Bróker',porcentajes:{asesor:0.01,gerente:0.005,broker:0.02,tercero:0.02},tercero_tipo:'Bróker'},
+        {id:'CAP-RECOMENDACION',nombre:'Recomendación de cliente',canal:'recomendacion',fuente:'Recomendación de cliente',porcentajes:{asesor:0.02,gerente:0.005,broker:0,tercero:0.005},tercero_tipo:'Recomendador'},
+        {id:'CAP-CORPORATIVO',nombre:'Corporativo / casa',canal:'corporativo',fuente:'Corporativo (casa)',porcentajes:{asesor:0.01,gerente:0.005,broker:0,tercero:0},tercero_tipo:'Casa'},
+        {id:'CAP-GUARDIA',nombre:'Guardia',canal:'guardia',fuente:'Guardia',porcentajes:{asesor:0.015,gerente:0.005,broker:0,tercero:0},tercero_tipo:''}
+      ],
+      distribuciones_temporales: [
+        {id:'DTC-CREDITO',nombre:'Crédito hipotecario',modalidad:'credito',partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:0.20},{parte:'autorizacion',nombre:'Autorización de crédito',evento:'credito_autorizado',pct:0.30},{parte:'escritura',nombre:'Escritura',evento:'escrituracion',pct:0.50}]},
+        {id:'DTC-CONTADO',nombre:'Contado',modalidad:'contado',partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:0.50},{parte:'escritura',nombre:'Escritura',evento:'escrituracion',pct:0.50}]}
+      ],
+      // Compatibilidad con 1.97.1: se conserva, pero el motor prefiere esquemas_captacion + distribuciones_temporales.
       esquemas_comision: [
         {id:'EC-CRED-DIR',nombre:'Crédito hipotecario — Venta directa',modalidad:'credito',canal:'directo',porcentajes:{asesor:0.02,gerente:0.005,broker:0},partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:0.5},{parte:'escritura',nombre:'Escritura',evento:'escrituracion',pct:0.5}]},
         {id:'EC-CRED-BRK',nombre:'Crédito hipotecario — Broker',modalidad:'credito',canal:'broker',porcentajes:{asesor:0.01,gerente:0.005,broker:0.02},partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:0.5},{parte:'escritura',nombre:'Escritura',evento:'escrituracion',pct:0.5}]},
@@ -222,15 +235,66 @@ window.IANNA_COM = (function(){
   function canalOperacion(ap){
     const o=ap?.oportunidadId&&typeof IANNA_OPO!=='undefined'?IANNA_OPO.porId(ap.oportunidadId):null;
     const brokerId=ap?.broker_id||o?.broker_id||null;
-    const origen=String(o?.origen||ap?.fuente||'').toLowerCase();
-    return (brokerId||origen==='broker')?'broker':'directo';
+    const origen=String(o?.origen||o?.fuente||ap?.fuente||'').toLowerCase();
+    if(brokerId||origen.includes('broker')||origen.includes('bróker')) return 'broker';
+    if(origen.includes('recom')) return 'recomendacion';
+    if(origen.includes('corp')||origen.includes('casa')) return 'corporativo';
+    if(origen.includes('guardia')) return 'guardia';
+    return 'directo';
   }
   function modalidadOperacion(ap){
     const t=String(ap?.financial_snapshot?.tipo_financiamiento||ap?.datos_cierre?.tipoCredito||'credito').toLowerCase();
     return t==='contado'?'contado':t;
   }
+  function _splitSeleccion(id){
+    const v=String(id||'');
+    if(v.includes('|')){ const [cap,dist]=v.split('|'); return {cap,dist}; }
+    if(v.includes('::')){ const [cap,dist]=v.split('::'); return {cap,dist}; }
+    return {cap:'',dist:v};
+  }
+  function esquemasCaptacionDisponibles(politica){
+    const p=politica||politicaActual();
+    return Array.isArray(p.esquemas_captacion)&&p.esquemas_captacion.length ? p.esquemas_captacion : politicaDefault().esquemas_captacion;
+  }
+  function distribucionesTemporalesDisponibles(politica){
+    const p=politica||politicaActual();
+    return Array.isArray(p.distribuciones_temporales)&&p.distribuciones_temporales.length ? p.distribuciones_temporales : politicaDefault().distribuciones_temporales;
+  }
+  function resolverEsquemaCaptacion(ap,politica){
+    const p=politica||politicaActual();
+    const selected=_splitSeleccion(ap?.financial_snapshot?.esquema_comision_id||ap?.datos_cierre?.esquema_comision_id||'');
+    const arr=esquemasCaptacionDisponibles(p);
+    if(selected.cap){ const byId=arr.find(x=>x.id===selected.cap); if(byId) return byId; }
+    const canal=canalOperacion(ap);
+    return arr.find(x=>x.canal===canal)||arr.find(x=>x.canal==='directo')||arr[0]||null;
+  }
+  function resolverDistribucionTemporal(ap,politica){
+    const p=politica||politicaActual();
+    const selected=_splitSeleccion(ap?.financial_snapshot?.esquema_comision_id||ap?.datos_cierre?.esquema_comision_id||ap?.financial_snapshot?.distribucion_temporal_id||'');
+    const arr=distribucionesTemporalesDisponibles(p);
+    if(selected.dist){ const byId=arr.find(x=>x.id===selected.dist); if(byId) return byId; }
+    const mod=modalidadOperacion(ap);
+    return arr.find(x=>x.modalidad===mod)||arr.find(x=>x.modalidad==='credito')||arr[0]||null;
+  }
   function resolverEsquema(ap,politica){
-    const p=politica||politicaActual(); const id=ap?.financial_snapshot?.esquema_comision_id||ap?.datos_cierre?.esquema_comision_id||'';
+    const p=politica||politicaActual();
+    const cap=resolverEsquemaCaptacion(ap,p);
+    const dist=resolverDistribucionTemporal(ap,p);
+    if(cap&&dist){
+      return {
+        id: `${cap.id}|${dist.id}`,
+        nombre: `${cap.nombre} · ${dist.nombre}`,
+        modalidad: dist.modalidad,
+        canal: cap.canal,
+        porcentajes: {asesor:Number(cap.porcentajes?.asesor||0),gerente:Number(cap.porcentajes?.gerente||0),broker:Number(cap.porcentajes?.broker||cap.porcentajes?.tercero||0),tercero:Number(cap.porcentajes?.tercero||0)},
+        tercero_tipo: cap.tercero_tipo||'',
+        captacion_id: cap.id,
+        distribucion_temporal_id: dist.id,
+        partes: dist.partes||[]
+      };
+    }
+    // Fallback 1.97.1
+    const id=ap?.financial_snapshot?.esquema_comision_id||ap?.datos_cierre?.esquema_comision_id||'';
     const arr=p.esquemas_comision||[]; if(id){const f=arr.find(x=>x.id===id);if(f)return f;}
     const mod=modalidadOperacion(ap), canal=canalOperacion(ap);
     return arr.find(x=>x.modalidad===mod&&x.canal===canal)||arr.find(x=>x.modalidad===mod&&x.canal==='cualquiera')||null;
@@ -266,7 +330,7 @@ window.IANNA_COM = (function(){
 
   // Comisión del gerente sobre esta operación.
   function comisionGerente(ap){ return comisionBeneficiario(ap,'gerente'); }
-  function comisionBroker(ap){ return canalOperacion(ap)==='broker'?comisionBeneficiario(ap,'broker'):{rol:'broker',base:0,porcentaje:0,total:0,partes:[],es_broker:false}; }
+  function comisionBroker(ap){ const c=comisionBeneficiario(ap,'broker'); return (c&&c.total>0)?c:{rol:'broker',base:0,porcentaje:0,total:0,partes:[],es_broker:canalOperacion(ap)==='broker'}; }
 
   // Registra las comisiones devengadas en el ledger financiero (una entrada por parte).
   // Se llama automáticamente al ejecutar la operación "contrato_firmado".
@@ -317,7 +381,7 @@ window.IANNA_COM = (function(){
     // Snapshot en la Operación
     snapshotDePolitica, congelarPolitica,
     // Cálculos
-    conceptos, baseComisionable, distribucionesDisponibles, resolverDistribucion, canalOperacion, modalidadOperacion, resolverEsquema, comisionBeneficiario, comisionAsesor, comisionGerente, comisionBroker,
+    conceptos, baseComisionable, distribucionesDisponibles, resolverDistribucion, canalOperacion, modalidadOperacion, esquemasCaptacionDisponibles, distribucionesTemporalesDisponibles, resolverEsquemaCaptacion, resolverDistribucionTemporal, resolverEsquema, comisionBeneficiario, comisionAsesor, comisionGerente, comisionBroker,
     // Devengo y penalización
     devengarComisiones, calcularPenalizacion,
   };

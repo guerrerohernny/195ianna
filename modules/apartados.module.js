@@ -74,6 +74,17 @@ function fillAsesor(){
   const p=DS.findOne('prospectos',$('ap-cli').value);
   if(p?.asesor) $('ap-ases').value=p.asesor;
 }
+
+function modeloIdDesdeLoteAsignado(l){
+  if(!l) return '';
+  const raw=l.modelo_asignado_id||l.modelo_id||l.modelo_asignado||l.modeloPlaneado||l.modelo_planeado||'';
+  if(!raw) return '';
+  const mods=DS.getModelos()||[];
+  const m=mods.find(x=>String(x.id)===String(raw)||String(x.nombre).toLowerCase()===String(raw).toLowerCase());
+  return m?m.id:'';
+}
+function modeloNombreDesdeId(mid){ const m=getMod(mid); return m?m.nombre:''; }
+
 function refreshModelosApartado(){
   // Morello: solo Manzana 10 — se recalcula cada vez que cambia el lote seleccionado
   const sel=$('ap-modelo'); if(!sel) return;
@@ -97,9 +108,19 @@ function onLoteChange(){
   refreshModelosApartado();
   if(!clave){ $('ap-lote-ficha').style.display='none'; return; }
   const l=getLote(clave); if(!l) return;
-  const modeloBloqueado=!!l.modelo_asignado && ['Entrega Rápida','Casa Muestra','En construcción'].includes(l.estado);
-  if(modeloBloqueado){ $('ap-modelo').value=l.modelo_asignado; $('ap-modelo').disabled=true; $('ap-modelo').title='Modelo físico asignado al lote. Solo Administración puede cambiarlo desde Inventario.'; onModeloChange(); }
-  else { $('ap-modelo').disabled=false; $('ap-modelo').title=''; }
+  const midAsignado=modeloIdDesdeLoteAsignado(l);
+  const modeloBloqueado=!!midAsignado && ['Entrega Rápida','Casa Muestra','En construcción','Construcción'].includes(l.estado);
+  if(modeloBloqueado){
+    $('ap-modelo').value=midAsignado;
+    $('ap-modelo').disabled=true;
+    $('ap-modelo').dataset.lockedModel=midAsignado;
+    $('ap-modelo').title='Modelo físico asignado al lote. Solo Administración puede cambiarlo desde Inventario.';
+    onModeloChange();
+  } else {
+    $('ap-modelo').disabled=false;
+    $('ap-modelo').dataset.lockedModel='';
+    $('ap-modelo').title='';
+  }
   $('ap-lote-ficha').style.display='block';
   $('ap-lote-info').innerHTML=[
     ['Ubicación',`<b>${ubicacionLote(l)}</b>`],['Manzana',l.mz],['Lote',l.lote],
@@ -219,7 +240,7 @@ function onLoteAdicChange(){
 function saveApartado(){
   const prospectoId=$('ap-cli').value;
   const clave_lote=$('ap-lote').value;
-  const modelo_id=$('ap-modelo').value;
+  let modelo_id=$('ap-modelo').value||$('ap-modelo').dataset.lockedModel||'';
   if(!prospectoId||!clave_lote||!modelo_id){ toast('Selecciona prospecto, lote y modelo','err'); return; }
   // Candado: Morello solo se construye en Manzana 10
   const _loteMz=getLote(clave_lote);
@@ -254,7 +275,7 @@ function saveApartado(){
     if(prev&&prev.clave_lote!==clave_lote){
       inventarioService.actualizarPorClave(prev.clave_lote,{estado:'Disponible',modelo_asignado:'',cliente_asignado:''});
     }
-    inventarioService.actualizarPorClave(clave_lote,{estado:'Apartado',modelo_asignado:getMod(modelo_id)?.nombre||'',cliente_asignado:prospectoEdit?.nombre||''});
+    inventarioService.actualizarPorClave(clave_lote,{estado:'Apartado',modelo_asignado:getMod(modelo_id)?.nombre||'',modelo_asignado_id:modelo_id,cliente_asignado:prospectoEdit?.nombre||''});
     auditLog('apartados',editId,'UPDATE',prev,ap);
     $('ap-lote').dataset.editId='';
     closeM('m-apt'); renderApartados(); renderInventario(); renderDashboard(); filterProsp();
@@ -305,13 +326,13 @@ function saveApartado(){
   const lotePrin=getLote(clave_lote);
   if(lotePrin){
     const hist=[...(lotePrin.historial||[]),{estadoAnterior:'Disponible',estadoNuevo:'Apartado',fecha:now,usuario:CU.id,nota:`Apartado — ${getMod(modelo_id)?.nombre}`}];
-    inventarioService.actualizarPorClave(clave_lote,{estado:'Apartado',modelo_asignado:getMod(modelo_id)?.nombre||'',cliente_asignado:prospectoNuevo?.nombre||'',historial:hist});
+    inventarioService.actualizarPorClave(clave_lote,{estado:'Apartado',modelo_asignado:getMod(modelo_id)?.nombre||'',modelo_asignado_id:modelo_id,cliente_asignado:prospectoNuevo?.nombre||'',historial:hist});
   }
   if(adActivo){
     const loteAd=getLote(adClaveVal);
     if(loteAd){
       const histAd=[...(loteAd.historial||[]),{estadoAnterior:'Disponible',estadoNuevo:'Apartado',fecha:now,usuario:CU.id,nota:`Lote adicional — apartado con lote principal ${clave_lote}`}];
-      inventarioService.actualizarPorClave(adClaveVal,{estado:'Apartado',modelo_asignado:getMod(modelo_id)?.nombre||'',cliente_asignado:prospectoNuevo?.nombre||'',historial:histAd});
+      inventarioService.actualizarPorClave(adClaveVal,{estado:'Apartado',modelo_asignado:getMod(modelo_id)?.nombre||'',modelo_asignado_id:modelo_id,cliente_asignado:prospectoNuevo?.nombre||'',historial:histAd});
     }
   }
   IANNA_PIPELINE.derivarEstatusOperacional(prospectoId,'Apartado',{operacion:'crear_apartado'});

@@ -241,7 +241,11 @@ function openDetalle(pid){
   const opos=typeof IANNA_OPO!=='undefined'?IANNA_OPO.dePersona(pid):[];
   $('det-est-btns').innerHTML=(esOper?`<span class="badge" style="background:#1E3D0F;color:#fff;margin-right:6px">${p.estatus} — historial comercial protegido</span>`:'')
     +(p.estatus==='Venta'?`<button class="btn btn-gold btn-xs" onclick="crearNuevaOportunidadPersona('${pid}')">+ Nueva oportunidad</button>`:ESTATUS_CRM.concat(ESTATUS_INACTIVOS).map(s=>`<button class="btn btn-xs ${p.estatus===s?'btn-navy':'btn-out'}" ${esOper?'disabled title="El estatus lo gobierna la Operación activa"':''} onclick="cambiarEstatus('${pid}','${s}')">${s}</button>`).join(''));
-  if(opsPrev.length||opos.length){ $('det-info').innerHTML+=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)"><b style="font-size:11px">HISTORIAL COMERCIAL</b><div style="font-size:11.5px;color:var(--t2);margin-top:5px">${opsPrev.length} venta(s) histórica(s) · ${opos.length} oportunidad(es)</div></div>`; }
+  if(opsPrev.length||opos.length){
+    const ventasHtml=opsPrev.length?`<div style="margin-top:8px"><b style="font-size:11px">VENTAS (histórico fijo)</b>${opsPrev.map(v=>`<div style="margin-top:5px;padding:7px;border:1px solid var(--bd);border-radius:8px;background:#f8fafc;font-size:11.5px"><b>${v.id_venta||v.id_publico||v.id}</b> · ${ubicacionLote(v.clave_lote)} · ${v.modelo_nombre||''}<br><span style="color:var(--t3)">${fD(v.fecha_venta||v.fecha_apartado)} · ${mxn(v.valor_operacion||0)}</span></div>`).join('')}</div>`:'';
+    const oposAct=opos.filter(o=>!['Ganada','Perdida','Cancelada'].includes(o.estado));
+    $('det-info').innerHTML+=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)"><b style="font-size:11px">HISTORIAL COMERCIAL</b><div style="font-size:11.5px;color:var(--t2);margin-top:5px">${opsPrev.length} venta(s) histórica(s) · ${oposAct.length} oportunidad(es) activa(s)</div>${ventasHtml}</div>`;
+  }
   renderTimeline(pid);
   renderDocsProspecto(pid);
   $$('#m-det .tab').forEach((t,i)=>t.classList.toggle('active',i===0));

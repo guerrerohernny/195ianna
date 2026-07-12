@@ -170,7 +170,7 @@ function generarCierre(aid){
   ['cierre-tab-0','cierre-tab-1'].forEach(tid=>{ const t=$(tid); if(t&&t.querySelectorAll) t.querySelectorAll('input,select,textarea').forEach(el=>el.disabled=false); });
   const _ub=$('btn-cierre-unlock'); if(_ub) _ub.style.display='none';
   const _bv=$('btn-descargar-cierre'); if(_bv) _bv.style.display = (DS.findOne('apartados',aid)?.estatus==='Venta')?'none':'';
-  renderDistribucionesCierre();
+  renderEsquemasComisionCierre();
   cierreTab(0);
   openM('m-cierre');
   if(typeof updateCierreWorkflowUI==='function') updateCierreWorkflowUI();
@@ -479,10 +479,24 @@ function renderDistribucionesCierre(){
 }
 
 // 1.97.1 — resolución de esquema Modalidad × Canal
+// 1.97.2 — resolución Fuente de captación × Distribución temporal
 function renderEsquemasComisionCierre(){
   const sel=$('c-distribucion-comision'); if(!sel||!_cierreData)return;
-  const ap=apartadosService.obtener(_cierreData.ap.id); const pol=IANNA_COM.politicaActual(); const mod=IANNA_COM.modalidadOperacion({...ap,financial_snapshot:{...(ap.financial_snapshot||{}),tipo_financiamiento:IANNA_VALOR.institucion($('c-institucion')?.value)?.tipo}}); const canal=IANNA_COM.canalOperacion(ap);
-  const arr=(pol.esquemas_comision||[]).filter(e=>(e.modalidad===mod||e.modalidad==='especial')&&(e.canal===canal||e.canal==='cualquiera'));
-  const actual=sel.value; sel.innerHTML=arr.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join(''); if(actual&&arr.some(e=>e.id===actual))sel.value=actual;
-  if(!sel.value&&arr[0])sel.value=arr[0].id;
+  const ap=apartadosService.obtener(_cierreData.ap.id)||_cierreData.ap;
+  const pol=IANNA_COM.politicaActual();
+  const inst=IANNA_VALOR.institucion($('c-institucion')?.value)||{tipo:'credito'};
+  const mod=String(inst.tipo||'credito').toLowerCase()==='contado'?'contado':'credito';
+  const canal=IANNA_COM.canalOperacion(ap);
+  const caps=(IANNA_COM.esquemasCaptacionDisponibles(pol)||[]);
+  const dists=(IANNA_COM.distribucionesTemporalesDisponibles(pol)||[]).filter(d=>d.modalidad===mod||d.modalidad==='especial');
+  const capRecom=caps.find(c=>c.canal===canal)||caps.find(c=>c.canal==='directo')||caps[0];
+  const prev=sel.value;
+  const opts=[];
+  (capRecom?[capRecom]:caps).forEach(c=>dists.forEach(d=>opts.push({value:`${c.id}|${d.id}`,label:`${c.nombre||c.fuente} · ${d.nombre}`})));
+  // Permitir override gerencial: otras fuentes de captación también disponibles en el cierre.
+  caps.filter(c=>!capRecom||c.id!==capRecom.id).forEach(c=>dists.forEach(d=>opts.push({value:`${c.id}|${d.id}`,label:`${c.nombre||c.fuente} · ${d.nombre}`})));
+  sel.innerHTML=opts.map(o=>`<option value="${o.value}">${o.label}</option>`).join('');
+  if(prev&&opts.some(o=>o.value===prev)) sel.value=prev; else if(opts[0]) sel.value=opts[0].value;
+  const lab=sel.closest('.fg')?.querySelector('label'); if(lab) lab.textContent='Esquema de captación + distribución de cobro';
 }
+

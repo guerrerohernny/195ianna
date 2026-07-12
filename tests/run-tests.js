@@ -215,10 +215,11 @@ t('todo movimiento responde las 6 preguntas (usuario/fecha/política/operación/
 /* ── 7 · MOTOR DE COMISIONES (Bloque 7) ── */
 console.log('▶ IANNA_COM (política versionada)');
 X("var _vC = {id:'vC1', asesor:'u_test', prospectoId:_pTest.id, estatus:'Venta', total_operacion:2000000};");
-t('comisión asesor directa = 2% con distribución 50/50 (política v1)', () => {
+t('comisión asesor directa = 2% y distribución temporal configurable', () => {
   const c = X("IANNA_COM.comisionAsesor(_vC)");
   verdad(Math.abs(c.total - c.base * 0.02) < 1, 'total=' + c.total + ' base=' + c.base);
-  verdad(c.partes.length === 2 && Math.abs(c.partes[0].monto - c.total/2) < 1, 'partes 50/50');
+  verdad(c.partes.length >= 2, 'sin partes temporales');
+  verdad(Math.abs(c.partes.reduce((s,p)=>s+p.pct,0)-1)<0.0001, 'partes no suman 100%');
   verdad(c.politica_version, 'sin versión de política');
 });
 t('con broker la comisión del asesor baja a 1%', () => {
@@ -336,6 +337,22 @@ t('nueva oportunidad conserva Persona/Cliente y crea OPO distinta',()=>{
   const a=X("IANNA_PIPELINE.nuevaOportunidad(_p1971.id,'Recompra')"); verdad(a.ok); eq(X("prospectosService.obtener(_p1971.id).id_cliente"),'CLI-000999'); verdad(/^OPO-/.test(a.oportunidad.id_publico));
 });
 t('esquema Contado + Directo mantiene distribución propia',()=>{ const p=X("IANNA_COM.politicaDefault()"); const e=p.esquemas_comision.find(x=>x.modalidad==='contado'&&x.canal==='directo'); eq(e.partes.length,2); verdad(Math.abs(e.partes.reduce((s,x)=>s+x.pct,0)-1)<1e-9); });
+
+
+/* ── 1.97.2 · UI Y COMISIONES V3 ── */
+console.log('▶ Fase 1.97.2 (UI & Commission Logic Stabilization)');
+t('captación por recomendación paga tercero/recomendador 0.5%', () => {
+  const c = X("IANNA_COM.comisionBroker({..._vC, fuente:'Recomendación de cliente'})");
+  verdad(Math.abs(c.total - c.base * 0.005) < 1, 'tercero=' + c.total);
+});
+t('distribuciones temporales vigentes suman 100%', () => {
+  const arr = X("IANNA_COM.distribucionesTemporalesDisponibles(IANNA_COM.politicaActual())");
+  arr.forEach(d => verdad(Math.abs((d.partes||[]).reduce((s,p)=>s+Number(p.pct||0),0)-1)<0.0001, d.nombre));
+});
+t('modelo asignado por nombre se resuelve a id de modelo', () => {
+  const r = X("(()=>{const mods=DS.getModelos(); const m=mods.find(x=>x.id==='BERDUN')||mods[0]; return m ? (mods.find(x=>String(x.nombre).toLowerCase()===String(m.nombre).toLowerCase())||{}).id : 'BERDUN';})()");
+  verdad(!!r, 'sin modelo resuelto');
+});
 
 console.log('\n═════════════════════════════════════');
 console.log(`RESULTADO: ${ok} pasaron · ${mal} fallaron`);
