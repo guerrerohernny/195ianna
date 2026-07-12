@@ -1,7 +1,7 @@
 /* IANNA CRM 1.97.1 — Control de Operaciones */
 function renderControlOperaciones(){
   const q=String($('co-search')?.value||'').trim().toLowerCase();
-  const filtro=$('co-tipo')?.value||''; const rows=[];
+  const filtro=$('co-tipo')?.value||''; const mostrarTecnicos=!!$('co-tecnico')?.checked; const rows=[];
   const prosp=Object.fromEntries((DS.find('prospectos')||[]).map(p=>[p.id,p]));
   const aps=DS.find('apartados')||[];
   aps.forEach(a=>{
@@ -12,8 +12,16 @@ function renderControlOperaciones(){
     (a.pagares_congelados||[]).forEach(pg=>rows.push({fecha:pg.fecha_emision||pg.fecha,tipoGrupo:'documento',id:pg.id_publico||pg.folio||('PAG-'+String(pg.n||'').padStart(6,'0')),tipo:'Pagaré',cliente:p.nombre||'',ubicacion:ub,estado:pg.estado||'Emitido',importe:Number(pg.monto||0),apId:a.id,fn:'imprimirPagares',accion:'documento'}));
   });
   (DS.db.ledger||[]).forEach(m=>{const a=aps.find(x=>x.id===m.operacionId)||{};const p=prosp[m.personaId||a.prospectoId]||{}; rows.push({fecha:m.fecha,tipoGrupo:'financiero',id:m.id_publico||m.id||'',tipo:m.tipo||'Movimiento',cliente:p.nombre||'',ubicacion:ubicacionLote(a.clave_lote)||'',estado:m.estado||'Registrado',importe:Number(m.monto||0),apId:a.id,accion:'financiero'});});
-  (DS.find('auditoria')||DS.db.auditoria||[]).forEach(a=>rows.push({fecha:a.fecha,tipoGrupo:'auditoria',id:a.id_publico||a.id||'',tipo:a.accion||'Auditoría',cliente:'',ubicacion:'',estado:'Trazado',importe:0}));
-  const out=rows.filter(r=>(!filtro||r.tipoGrupo===filtro)&&(!q||Object.values(r).some(v=>String(v??'').toLowerCase().includes(q)))).sort((a,b)=>new Date(b.fecha||0)-new Date(a.fecha||0));
+  if(mostrarTecnicos || filtro==='auditoria'){
+    (DS.find('auditoria')||DS.db.auditoria||[]).forEach(a=>rows.push({fecha:a.fecha,tipoGrupo:'auditoria',id:a.id_publico||a.id||'',tipo:a.accion||'Auditoría',cliente:'',ubicacion:'',estado:'Trazado',importe:0,accion:'tecnico'}));
+  }
+  const TIPOS_NEGOCIO=['Apartado / Operación','Venta / Operación','Pagaré','Recibo de Apartado','Recibo de Pago Adicional','Contrato','Movimiento','ingreso','pago','comision_asesor','comision_gerente','comision_broker'];
+  const out=rows.filter(r=>{
+    if(!mostrarTecnicos && !filtro && r.tipoGrupo==='auditoria') return false;
+    if(!mostrarTecnicos && !filtro && r.id && String(r.id).startsWith('_')) return false;
+    if(!mostrarTecnicos && !filtro && r.tipoGrupo==='operacion' && String(r.tipo||'').includes('Transición')) return false;
+    return (!filtro||r.tipoGrupo===filtro)&&(!q||Object.values(r).some(v=>String(v??'').toLowerCase().includes(q)));
+  }).sort((a,b)=>new Date(b.fecha||0)-new Date(a.fecha||0));
   const tb=$('co-tbody'); if(!tb)return; tb.innerHTML=out.length?out.slice(0,500).map(r=>{
     const openDoc=(r.accion==='documento'&&r.apId&&r.fn)?`<button class="btn btn-out btn-xs" onclick="abrirDocumentoGuardado('${r.apId}','${r.fn}','${r.pagoId||''}')">Abrir</button>`:'';
     const goExp=r.apId?`<button class="btn btn-navy btn-xs" onclick="abrirOperaciones('${r.apId}')">Expediente</button>`:'';

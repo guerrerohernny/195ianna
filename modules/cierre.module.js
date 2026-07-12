@@ -487,16 +487,22 @@ function renderEsquemasComisionCierre(){
   const inst=IANNA_VALOR.institucion($('c-institucion')?.value)||{tipo:'credito'};
   const mod=String(inst.tipo||'credito').toLowerCase()==='contado'?'contado':'credito';
   const canal=IANNA_COM.canalOperacion(ap);
-  const caps=(IANNA_COM.esquemasCaptacionDisponibles(pol)||[]);
-  const dists=(IANNA_COM.distribucionesTemporalesDisponibles(pol)||[]).filter(d=>d.modalidad===mod||d.modalidad==='especial');
-  const capRecom=caps.find(c=>c.canal===canal)||caps.find(c=>c.canal==='directo')||caps[0];
+  const comerciales=(IANNA_COM.esquemasComercialesDisponibles?IANNA_COM.esquemasComercialesDisponibles(pol):[]).filter(e=>e.modalidad===mod||e.modalidad==='especial');
   const prev=sel.value;
-  const opts=[];
-  (capRecom?[capRecom]:caps).forEach(c=>dists.forEach(d=>opts.push({value:`${c.id}|${d.id}`,label:`${c.nombre||c.fuente} · ${d.nombre}`})));
-  // Permitir override gerencial: otras fuentes de captación también disponibles en el cierre.
-  caps.filter(c=>!capRecom||c.id!==capRecom.id).forEach(c=>dists.forEach(d=>opts.push({value:`${c.id}|${d.id}`,label:`${c.nombre||c.fuente} · ${d.nombre}`})));
+  let opts=[];
+  if(comerciales.length){
+    const recom=comerciales.find(e=>e.canal===canal)||comerciales.find(e=>e.canal==='directo')||comerciales[0];
+    if(recom) opts.push({value:recom.id,label:recom.nombre});
+    comerciales.filter(e=>!recom||e.id!==recom.id).forEach(e=>opts.push({value:e.id,label:e.nombre}));
+  }else{
+    const caps=(IANNA_COM.esquemasCaptacionDisponibles(pol)||[]);
+    const dists=(IANNA_COM.distribucionesTemporalesDisponibles(pol)||[]).filter(d=>d.modalidad===mod||d.modalidad==='especial');
+    const capRecom=caps.find(c=>c.canal===canal)||caps.find(c=>c.canal==='directo')||caps[0];
+    (capRecom?[capRecom]:caps).forEach(c=>dists.forEach(d=>opts.push({value:`${c.id}|${d.id}`,label:`${c.nombre||c.fuente} · ${d.nombre}`})));
+    caps.filter(c=>!capRecom||c.id!==capRecom.id).forEach(c=>dists.forEach(d=>opts.push({value:`${c.id}|${d.id}`,label:`${c.nombre||c.fuente} · ${d.nombre}`})));
+  }
   sel.innerHTML=opts.map(o=>`<option value="${o.value}">${o.label}</option>`).join('');
   if(prev&&opts.some(o=>o.value===prev)) sel.value=prev; else if(opts[0]) sel.value=opts[0].value;
-  const lab=sel.closest('.fg')?.querySelector('label'); if(lab) lab.textContent='Esquema de captación + distribución de cobro';
+  const lab=sel.closest('.fg')?.querySelector('label'); if(lab) lab.textContent='Esquema comercial de comisión';
 }
 

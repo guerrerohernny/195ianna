@@ -97,7 +97,7 @@ function saveParametros(){
 
 
 // ══ FASE 1.9: Política Comercial editable desde Parámetros ══════
-let _distDraft={asesor:[],gerente:[]}; let _cobroDistDraft={credito:null,contado:null,especiales:[]}; let _esquemasComisionDraft=[]; let _captacionDraft=[]; let _distTemporalDraft=[];
+let _distDraft={asesor:[],gerente:[]}; let _cobroDistDraft={credito:null,contado:null,especiales:[]}; let _esquemasComisionDraft=[]; let _captacionDraft=[]; let _distTemporalDraft=[]; let _esquemasComercialesDraft=[];
 function renderPoliticaComercial(){
   const pol = IANNA_COM.politicaActual();
   $('pc-version').textContent = pol.version;
@@ -114,7 +114,7 @@ function renderPoliticaComercial(){
   $('pc-contado-act').checked=!!pol.reglas_especiales?.contado?.activa;
   $('pc-contado-pct').value=((pol.reglas_especiales?.contado?.porcentaje_asesor||0.025)*100).toLocaleString('es-MX',{maximumFractionDigits:3});
   _distDraft.asesor=JSON.parse(JSON.stringify(pol.distribucion_asesor||[])); _distDraft.gerente=JSON.parse(JSON.stringify(pol.distribucion_gerente||[]));
-  const d=pol.distribuciones_cobro||IANNA_COM.politicaDefault().distribuciones_cobro; _cobroDistDraft=JSON.parse(JSON.stringify(d)); renderCobroDistribuciones(); _captacionDraft=JSON.parse(JSON.stringify(pol.esquemas_captacion||IANNA_COM.politicaDefault().esquemas_captacion||[])); _distTemporalDraft=JSON.parse(JSON.stringify(pol.distribuciones_temporales||IANNA_COM.politicaDefault().distribuciones_temporales||[])); _esquemasComisionDraft=JSON.parse(JSON.stringify(pol.esquemas_comision||[])); renderEsquemasComision();
+  const d=pol.distribuciones_cobro||IANNA_COM.politicaDefault().distribuciones_cobro; _cobroDistDraft=JSON.parse(JSON.stringify(d)); renderCobroDistribuciones(); _captacionDraft=JSON.parse(JSON.stringify(pol.esquemas_captacion||IANNA_COM.politicaDefault().esquemas_captacion||[])); _distTemporalDraft=JSON.parse(JSON.stringify(pol.distribuciones_temporales||IANNA_COM.politicaDefault().distribuciones_temporales||[])); _esquemasComisionDraft=JSON.parse(JSON.stringify(pol.esquemas_comision||[])); _esquemasComercialesDraft=JSON.parse(JSON.stringify((IANNA_COM.esquemasComercialesDisponibles?IANNA_COM.esquemasComercialesDisponibles(pol):(pol.esquemas_comerciales||[])))); renderEsquemasComision();
   $('pc-pen-apt').value = (((pol.penalizaciones?.cancelacion_apartado?.valor)||0)*100).toFixed(2);
   $('pc-pen-ven').value = (((pol.penalizaciones?.cancelacion_venta?.valor)||0)*100).toFixed(2);
 }
@@ -154,11 +154,51 @@ function guardarPoliticaComercial(){
     },
     aplicar_descuento:$('pc-desc').checked,
     porcentajes:{ asesor_directo:(parseFloat($('pc-pct-ad').value)||0)/100, asesor_broker:(parseFloat($('pc-pct-ab').value)||0)/100, gerente:(parseFloat($('pc-pct-ge').value)||0)/100, broker:(parseFloat($('pc-pct-bk').value)||0)/100 },
-    distribucion_asesor:JSON.parse(JSON.stringify((_distTemporalDraft.find(d=>d.modalidad==='credito')||{}).partes||_cobroDistDraft.credito?.partes||[])), distribucion_gerente:JSON.parse(JSON.stringify((_distTemporalDraft.find(d=>d.modalidad==='credito')||{}).partes||_cobroDistDraft.credito?.partes||[])), distribuciones_cobro:JSON.parse(JSON.stringify(_cobroDistDraft)), esquemas_captacion:JSON.parse(JSON.stringify(_captacionDraft)), distribuciones_temporales:JSON.parse(JSON.stringify(_distTemporalDraft)), esquemas_comision:JSON.parse(JSON.stringify(_esquemasComisionDraft)),
+    distribucion_asesor:JSON.parse(JSON.stringify((_esquemasComercialesDraft.find(e=>e.modalidad==='credito'&&e.canal==='directo')||{}).partes||_cobroDistDraft.credito?.partes||[])), distribucion_gerente:JSON.parse(JSON.stringify((_esquemasComercialesDraft.find(e=>e.modalidad==='credito'&&e.canal==='directo')||{}).partes||_cobroDistDraft.credito?.partes||[])), distribuciones_cobro:JSON.parse(JSON.stringify(_cobroDistDraft)), esquemas_captacion:JSON.parse(JSON.stringify(_captacionDraft)), distribuciones_temporales:JSON.parse(JSON.stringify(_distTemporalDraft)), esquemas_comision:JSON.parse(JSON.stringify(_esquemasComisionDraft)), esquemas_comerciales:JSON.parse(JSON.stringify(_esquemasComercialesDraft)),
     reglas_especiales:{contado:{activa:$('pc-contado-act').checked,porcentaje_asesor:(parseFloat($('pc-contado-pct').value)||0)/100}},
     penalizaciones:{ cancelacion_apartado:{tipo:'porcentaje',valor:(parseFloat($('pc-pen-apt').value)||0)/100,exhibiciones:1,retencion_comisiones:false}, cancelacion_venta:{tipo:'porcentaje',valor:(parseFloat($('pc-pen-ven').value)||0)/100,exhibiciones:1,retencion_comisiones:false,distribucion:[]} }
   };
   const guardada=IANNA_COM.guardarPolitica(nueva,'Cambio manual desde Parámetros'); renderPoliticaComercial(); toast('Política Comercial guardada como '+guardada.version+' ✓','ok');
+}
+
+// 1.97.3 — UI unificada: un Esquema Comercial contiene fuente, modalidad, porcentajes y distribución.
+function renderEsquemasComision(){
+  const el=$('pc-esquemas-comision'); if(!el)return;
+  const modalidades=['credito','contado','especial'];
+  const canales=['directo','broker','recomendacion','corporativo','guardia'];
+  const rows=(_esquemasComercialesDraft||[]).map((e,i)=>{
+    const partes=(e.partes||[]).map((p,j)=>`<div style="display:grid;grid-template-columns:1.3fr .55fr 30px;gap:5px;margin-top:5px"><input value="${p.nombre||''}" oninput="_esquemasComercialesDraft[${i}].partes[${j}].nombre=this.value"><input type="number" step="0.001" value="${_pctVal(p.pct)}" oninput="_esquemasComercialesDraft[${i}].partes[${j}].pct=(parseFloat(this.value)||0)/100"><button class="btn btn-red btn-xs" onclick="_esquemasComercialesDraft[${i}].partes.splice(${j},1);renderEsquemasComision()">×</button></div>`).join('');
+    const sum=(e.partes||[]).reduce((s,x)=>s+Number(x.pct||0),0);
+    return `<div class="card" style="padding:12px;margin:10px 0;border-left:4px solid var(--gold)">
+      <div style="display:grid;grid-template-columns:1.4fr .7fr .8fr auto;gap:8px;align-items:end">
+        <div class="fg" style="margin:0"><label>Nombre del esquema</label><input value="${e.nombre||''}" oninput="_esquemasComercialesDraft[${i}].nombre=this.value"></div>
+        <div class="fg" style="margin:0"><label>Modalidad</label><select onchange="_esquemasComercialesDraft[${i}].modalidad=this.value">${modalidades.map(m=>`<option value="${m}" ${e.modalidad===m?'selected':''}>${m==='credito'?'Crédito':m==='contado'?'Contado':'Especial'}</option>`).join('')}</select></div>
+        <div class="fg" style="margin:0"><label>Fuente</label><select onchange="_esquemasComercialesDraft[${i}].canal=this.value">${canales.map(c=>`<option value="${c}" ${e.canal===c?'selected':''}>${c==='directo'?'Personal':c==='broker'?'Bróker':c==='recomendacion'?'Recomendación':c==='corporativo'?'Casa':c==='guardia'?'Guardia':c}</option>`).join('')}</select></div>
+        <button class="btn btn-red btn-xs" onclick="_esquemasComercialesDraft.splice(${i},1);renderEsquemasComision()">Eliminar</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px">
+        <div class="fg" style="margin:0"><label>Asesor %</label><input type="number" step="0.001" value="${_pctVal(e.porcentajes?.asesor)}" oninput="setPctEsquemaComercial(${i},'asesor',this.value)"></div>
+        <div class="fg" style="margin:0"><label>Gerente %</label><input type="number" step="0.001" value="${_pctVal(e.porcentajes?.gerente)}" oninput="setPctEsquemaComercial(${i},'gerente',this.value)"></div>
+        <div class="fg" style="margin:0"><label>Tercero</label><input value="${e.tercero_tipo||''}" placeholder="Bróker / Recomendador / Casa" oninput="_esquemasComercialesDraft[${i}].tercero_tipo=this.value"></div>
+        <div class="fg" style="margin:0"><label>% Tercero</label><input type="number" step="0.001" value="${_pctVal(e.porcentajes?.tercero||e.porcentajes?.broker)}" oninput="setPctEsquemaComercial(${i},'tercero',this.value);setPctEsquemaComercial(${i},'broker',this.value)"></div>
+      </div>
+      <div style="font-size:11px;font-weight:700;margin-top:12px">Distribución de cobro dentro del mismo esquema — debe sumar 100%</div>
+      ${partes||'<div style="font-size:12px;color:var(--t3);margin-top:6px">Sin partes.</div>'}
+      <button class="btn btn-out btn-xs" style="margin-top:7px" onclick="_esquemasComercialesDraft[${i}].partes.push({parte:'parte_'+Date.now(),nombre:'Nueva parte',evento:'manual',pct:0});renderEsquemasComision()">+ Agregar parte</button>
+      <div style="font-size:11px;color:${Math.abs(sum-1)<0.0001?'#047857':'#b45309'};margin-top:6px">Total distribución: ${_pctVal(sum)}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div style="font-weight:700;font-size:12.5px;margin-bottom:6px">Esquemas comerciales de comisión</div><div style="font-size:11.5px;color:var(--t3);margin-bottom:8px">Cada esquema une <b>modalidad</b>, <b>fuente</b>, porcentajes de Asesor/Gerente/Tercero y su distribución de cobro. En el cierre se selecciona modalidad + fuente, e IANNA aplica el esquema correspondiente.</div>${rows||'<div class="empty"><p>Sin esquemas comerciales.</p></div>'}<button class="btn btn-out btn-xs" onclick="addEsquemaComercial()">+ Agregar esquema comercial</button>`;
+}
+function setPctEsquemaComercial(i,rol,v){ if(!_esquemasComercialesDraft[i].porcentajes)_esquemasComercialesDraft[i].porcentajes={}; _esquemasComercialesDraft[i].porcentajes[rol]=(parseFloat(v)||0)/100; }
+function addEsquemaComercial(){ _esquemasComercialesDraft.push({id:'ECOM-'+Date.now(),nombre:'Nuevo esquema comercial',modalidad:'credito',canal:'directo',fuente:'',porcentajes:{asesor:0.02,gerente:0.005,broker:0,tercero:0},tercero_tipo:'',partes:[{parte:'firma',nombre:'Firma',evento:'contrato_firmado',pct:1}]}); renderEsquemasComision(); }
+function addEsquemaCaptacion(){ addEsquemaComercial(); }
+function addDistribucionTemporal(){ addEsquemaComercial(); }
+function addEsquemaComisionEspecial(){ addEsquemaComercial(); }
+function validarEsquemasComision(){
+  if(!_esquemasComercialesDraft.length){ toast('Agrega al menos un esquema comercial','err'); return false; }
+  for(const e of _esquemasComercialesDraft){ const sum=(e.partes||[]).reduce((s,x)=>s+Number(x.pct||0),0); if(Math.abs(sum-1)>0.0001){ toast(`La distribución de "${e.nombre}" debe sumar 100%`,'err'); return false; } }
+  return true;
 }
 
 /* ── FASE 1.95 · BLOQUE 10: navegación por categorías ─────────────── */

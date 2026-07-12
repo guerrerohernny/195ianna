@@ -40,11 +40,17 @@ function setView(m){
   $('v-kanban').className='btn btn-sm '+(m==='kanban'?'btn-navy':'btn-out');
   filterProsp();
 }
+function _historialPersona(pid){
+  const ventas=DS.find('apartados').filter(a=>a.prospectoId===pid&&a.estatus==='Venta');
+  const opos=(typeof IANNA_OPO!=='undefined'?IANNA_OPO.dePersona(pid):[]).filter(o=>!['Ganada','Perdida','Cancelada'].includes(o.estado));
+  return {ventas,opos};
+}
+function _badgesHistorial(pid){ const h=_historialPersona(pid); return `${h.ventas.length?`<span class="badge" style="background:#ecfdf5;color:#047857;margin-top:4px">${h.ventas.length} venta${h.ventas.length>1?'s':''}</span>`:''}${h.opos.length?`<span class="badge" style="background:#eff6ff;color:#1d4ed8;margin-top:4px;margin-left:4px">${h.opos.length} oportunidad${h.opos.length>1?'es':''}</span>`:''}`; }
 function renderListaView(list){
   const tb=$('prosp-tbody');
   if(!list.length){ tb.innerHTML=`<tr><td colspan="8"><div class="empty"><div class="empty-i">👥</div><p>Sin prospectos con estos filtros.</p></div></td></tr>`; return; }
   tb.innerHTML=list.map(p=>{const a=getUser(p.asesor);return `<tr style="cursor:pointer" onclick="openDetalle('${p.id}')">
-    <td><div style="font-weight:600">${p.nombre}</div><div style="font-size:11.5px;color:var(--t3)">${p.telefono}</div></td>
+    <td><div style="font-weight:600">${p.nombre}</div><div style="font-size:11.5px;color:var(--t3)">${p.telefono}</div><div>${_badgesHistorial(p.id)}</div></td>
     <td style="color:var(--t2)">${p.fuente||'—'}</td>
     <td style="font-weight:500">${mxn(p.presupuesto)}</td>
     <td>${scoreBadge(p)}</td>
@@ -59,7 +65,7 @@ function renderKanbanView(list){
     const cs=list.filter(p=>p.estatus===est);
     return `<div class="k-col" ondragover="kDragOver(event)" ondrop="kDrop(event,'${est}')" data-est="${est}">
       <div class="k-hdr"><div class="k-ttl">${est}</div><div class="k-cnt">${cs.length}</div></div>
-      <div class="k-cards">${cs.length===0?'<div class="k-empty">Arrastra aquí</div>':cs.map(p=>{const a=getUser(p.asesor);return `<div class="k-card" draggable="true" onclick="openDetalle('${p.id}')" ondragstart="kDragStart(event,'${p.id}')" ondragend="kDragEnd(event)" data-pid="${p.id}"><div class="k-nm">${p.nombre}</div><div class="k-ph">${p.telefono}</div><div class="k-ft"><div style="font-size:11px;color:var(--t3)">${a.nombre.split(' ')[0]}</div>${scoreBadge(p)}</div></div>`;}).join('')}</div>
+      <div class="k-cards">${cs.length===0?'<div class="k-empty">Arrastra aquí</div>':cs.map(p=>{const a=getUser(p.asesor);return `<div class="k-card" draggable="true" onclick="openDetalle('${p.id}')" ondragstart="kDragStart(event,'${p.id}')" ondragend="kDragEnd(event)" data-pid="${p.id}"><div class="k-nm">${p.nombre}</div><div class="k-ph">${p.telefono}</div><div>${_badgesHistorial(p.id)}</div><div class="k-ft"><div style="font-size:11px;color:var(--t3)">${a.nombre.split(' ')[0]}</div>${scoreBadge(p)}</div></div>`;}).join('')}</div>
     </div>`;
   }).join('');
 }
@@ -258,7 +264,7 @@ function crearNuevaOportunidadPersona(pid){
   const fuente=prompt('Fuente de la nueva oportunidad:', 'Recompra')||'Recompra';
   const o=IANNA_OPO.crear({personaId:pid,proyectoId:'valle-de-aragon',estado:'Nueva',origen:fuente,asesor_asignado:p.asesor,broker_id:null,_motivo:'Nueva compra de cliente existente'});
   // compatibilidad UI: la Persona vuelve al pipeline sin alterar ventas históricas
-  prospectosService.actualizar(pid,{estatus:'Nuevo'});
+  prospectosService.actualizar(pid,{estatus:'Nuevo', oportunidad_activa_id:o.id, oportunidad_activa_publica:o.id_publico});
   try{IANNA_MOTOR.auditar('oportunidades',o.id,'NUEVA_OPORTUNIDAD_RECOMPRA',{}, {personaId:pid,id_publico:o.id_publico,origen:fuente},'Cliente existente inicia nueva oportunidad');}catch(e){}
   toast('Nueva oportunidad creada: '+o.id_publico,'ok',5000); closeM('m-det'); filterProsp(); renderDashboard();
 }

@@ -109,16 +109,24 @@ function onLoteChange(){
   if(!clave){ $('ap-lote-ficha').style.display='none'; return; }
   const l=getLote(clave); if(!l) return;
   const midAsignado=modeloIdDesdeLoteAsignado(l);
-  const modeloBloqueado=!!midAsignado && ['Entrega Rápida','Casa Muestra','En construcción','Construcción'].includes(l.estado);
+  const estadoDerivado=(l.modelo_asignado&&!['Apartado','Vendido','Casa Muestra','Subdividido'].includes(l.estado))?'Entrega Rápida':l.estado;
+  const modeloBloqueado=!!midAsignado && ['Entrega Rápida','Casa Muestra','En construcción','Construcción'].includes(estadoDerivado);
   if(modeloBloqueado){
+    const sel=$('ap-modelo');
+    // Asegura que la opción exista aunque el catálogo traiga un nombre/id legacy.
+    if(sel && ![...sel.options].some(o=>String(o.value)===String(midAsignado))){
+      const opt=document.createElement('option'); opt.value=midAsignado; opt.textContent=(l.modelo_asignado||modeloNombreDesdeId(midAsignado)||midAsignado)+' — asignado físicamente'; sel.appendChild(opt);
+    }
     $('ap-modelo').value=midAsignado;
     $('ap-modelo').disabled=true;
     $('ap-modelo').dataset.lockedModel=midAsignado;
+    $('ap-modelo').dataset.lockedName=l.modelo_asignado||modeloNombreDesdeId(midAsignado)||'';
     $('ap-modelo').title='Modelo físico asignado al lote. Solo Administración puede cambiarlo desde Inventario.';
     onModeloChange();
   } else {
     $('ap-modelo').disabled=false;
     $('ap-modelo').dataset.lockedModel='';
+    $('ap-modelo').dataset.lockedName='';
     $('ap-modelo').title='';
   }
   $('ap-lote-ficha').style.display='block';
@@ -240,7 +248,7 @@ function onLoteAdicChange(){
 function saveApartado(){
   const prospectoId=$('ap-cli').value;
   const clave_lote=$('ap-lote').value;
-  let modelo_id=$('ap-modelo').value||$('ap-modelo').dataset.lockedModel||'';
+  let modelo_id=$('ap-modelo').dataset.lockedModel||$('ap-modelo').value||'';
   if(!prospectoId||!clave_lote||!modelo_id){ toast('Selecciona prospecto, lote y modelo','err'); return; }
   // Candado: Morello solo se construye en Manzana 10
   const _loteMz=getLote(clave_lote);

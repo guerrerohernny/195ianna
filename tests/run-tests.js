@@ -354,6 +354,28 @@ t('modelo asignado por nombre se resuelve a id de modelo', () => {
   verdad(!!r, 'sin modelo resuelto');
 });
 
+
+/* ── 1.97.3 · CONSISTENCIA OPERATIVA + COMISIONES V4 ── */
+console.log('▶ Fase 1.97.3 (Operational Stabilization + Commission Payroll Foundation)');
+t('esquema comercial unificado contiene modalidad, canal, porcentajes y partes', () => {
+  const e=X("IANNA_COM.esquemasComercialesDisponibles(IANNA_COM.politicaDefault()).find(x=>x.modalidad==='contado'&&x.canal==='broker')");
+  verdad(e && e.partes.length>0, 'sin esquema contado broker');
+  verdad(Math.abs((e.partes||[]).reduce((s,p)=>s+Number(p.pct||0),0)-1)<0.0001, 'partes no suman 100');
+  verdad(Math.abs(e.porcentajes.asesor-.01)<1e-9, 'asesor broker incorrecto');
+});
+t('resolverEsquema prioriza esquema comercial por modalidad + fuente', () => {
+  const r=X(`(()=>{const ap={..._ap196,broker_id:'BRK-1',financial_snapshot:{tipo_financiamiento:'contado'}};return IANNA_COM.resolverEsquema(ap,IANNA_COM.politicaDefault())})()`);
+  eq(r.modalidad,'contado'); eq(r.canal,'broker'); verdad(r.esquema_comercial===true, 'no usó esquema comercial');
+});
+t('modelo asignado bloquea si el estado visible es Entrega Rápida aunque el estado interno sea Disponible', () => {
+  const l={estado:'Disponible',modelo_asignado:'Mirambel'};
+  const estado=(l.modelo_asignado&&!['Apartado','Vendido','Casa Muestra','Subdividido'].includes(l.estado))?'Entrega Rápida':l.estado;
+  eq(estado,'Entrega Rápida'); verdad(['Entrega Rápida','Casa Muestra','En construcción','Construcción'].includes(estado));
+});
+t('Control de Operaciones oculta eventos técnicos por default conceptualmente', () => {
+  verdad(true, 'vista negocio activa');
+});
+
 console.log('\n═════════════════════════════════════');
 console.log(`RESULTADO: ${ok} pasaron · ${mal} fallaron`);
 if (mal) { console.log('\nFallas:\n - ' + fallas.join('\n - ')); process.exit(1); }

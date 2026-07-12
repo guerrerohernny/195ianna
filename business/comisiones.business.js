@@ -260,6 +260,33 @@ window.IANNA_COM = (function(){
     const p=politica||politicaActual();
     return Array.isArray(p.distribuciones_temporales)&&p.distribuciones_temporales.length ? p.distribuciones_temporales : politicaDefault().distribuciones_temporales;
   }
+  // 1.97.3 — Esquema Comercial unificado: modalidad + fuente + porcentajes + distribución.
+  function _normalizarPctPartes(partes){
+    return (partes||[]).map(x=>({parte:x.parte||('parte_'+Math.random().toString(36).slice(2,6)),nombre:x.nombre||x.parte||'Parte',evento:x.evento||x.parte||'manual',pct:Number(x.pct||0)}));
+  }
+  function esquemasComercialesDisponibles(politica){
+    const p=politica||politicaActual();
+    if(Array.isArray(p.esquemas_comerciales)&&p.esquemas_comerciales.length) return p.esquemas_comerciales;
+    const caps=esquemasCaptacionDisponibles(p);
+    const dists=distribucionesTemporalesDisponibles(p);
+    const out=[];
+    caps.forEach(c=>{
+      dists.forEach(d=>{
+        if(!['credito','contado','especial'].includes(d.modalidad||'')) return;
+        out.push({
+          id:`ECOM-${String(d.modalidad||'especial').toUpperCase()}-${String(c.canal||c.id||'directo').toUpperCase()}`,
+          nombre:`${d.nombre||d.modalidad} — ${c.nombre||c.fuente}`,
+          modalidad:d.modalidad||'especial',
+          canal:c.canal||'directo',
+          fuente:c.fuente||c.nombre||'',
+          porcentajes:{asesor:Number(c.porcentajes?.asesor||0),gerente:Number(c.porcentajes?.gerente||0),broker:Number(c.porcentajes?.broker||c.porcentajes?.tercero||0),tercero:Number(c.porcentajes?.tercero||c.porcentajes?.broker||0)},
+          tercero_tipo:c.tercero_tipo||'',
+          partes:_normalizarPctPartes(d.partes||[])
+        });
+      });
+    });
+    return out;
+  }
   function resolverEsquemaCaptacion(ap,politica){
     const p=politica||politicaActual();
     const selected=_splitSeleccion(ap?.financial_snapshot?.esquema_comision_id||ap?.datos_cierre?.esquema_comision_id||'');
@@ -278,6 +305,20 @@ window.IANNA_COM = (function(){
   }
   function resolverEsquema(ap,politica){
     const p=politica||politicaActual();
+    const idSel=ap?.financial_snapshot?.esquema_comision_id||ap?.datos_cierre?.esquema_comision_id||'';
+    const comerciales=esquemasComercialesDisponibles(p);
+    if(comerciales.length){
+      const mod=modalidadOperacion(ap), canal=canalOperacion(ap);
+      const direct=comerciales.find(x=>x.id===idSel);
+      const matched=direct||comerciales.find(x=>x.modalidad===mod&&x.canal===canal)||comerciales.find(x=>x.modalidad===mod&&x.canal==='directo')||comerciales[0];
+      if(matched){
+        return {
+          id:matched.id,nombre:matched.nombre,modalidad:matched.modalidad,canal:matched.canal,fuente:matched.fuente||'',
+          porcentajes:{asesor:Number(matched.porcentajes?.asesor||0),gerente:Number(matched.porcentajes?.gerente||0),broker:Number(matched.porcentajes?.broker||matched.porcentajes?.tercero||0),tercero:Number(matched.porcentajes?.tercero||matched.porcentajes?.broker||0)},
+          tercero_tipo:matched.tercero_tipo||'',partes:_normalizarPctPartes(matched.partes||[]), esquema_comercial:true
+        };
+      }
+    }
     const cap=resolverEsquemaCaptacion(ap,p);
     const dist=resolverDistribucionTemporal(ap,p);
     if(cap&&dist){
@@ -381,7 +422,7 @@ window.IANNA_COM = (function(){
     // Snapshot en la Operación
     snapshotDePolitica, congelarPolitica,
     // Cálculos
-    conceptos, baseComisionable, distribucionesDisponibles, resolverDistribucion, canalOperacion, modalidadOperacion, esquemasCaptacionDisponibles, distribucionesTemporalesDisponibles, resolverEsquemaCaptacion, resolverDistribucionTemporal, resolverEsquema, comisionBeneficiario, comisionAsesor, comisionGerente, comisionBroker,
+    conceptos, baseComisionable, distribucionesDisponibles, resolverDistribucion, canalOperacion, modalidadOperacion, esquemasCaptacionDisponibles, distribucionesTemporalesDisponibles, resolverEsquemaCaptacion, resolverDistribucionTemporal, esquemasComercialesDisponibles, resolverEsquema, comisionBeneficiario, comisionAsesor, comisionGerente, comisionBroker,
     // Devengo y penalización
     devengarComisiones, calcularPenalizacion,
   };
