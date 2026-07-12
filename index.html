@@ -241,7 +241,7 @@
     <!-- CONTROL DE OPERACIONES 1.97.1 -->
     <div class="page" id="page-control-operaciones">
       <div class="sechdr"><div><div class="sectl">Control de Operaciones</div><div class="secst">Trazabilidad global de entidades, documentos y movimientos</div></div></div>
-      <div class="fbar"><div class="fsrch"><span>🔎</span><input id="co-search" placeholder="REC-000001, APT-000001, cliente, ubicación…" oninput="renderControlOperaciones()"></div><select class="fsel" id="co-tipo" onchange="renderControlOperaciones()"><option value="">Todos</option><option value="operacion">Operaciones</option><option value="documento">Documentos</option><option value="financiero">Financieros</option><option value="auditoria">Auditoría</option></select></div>
+      <div class="fbar"><div class="fsrch"><span>🔎</span><input id="co-search" placeholder="REC-000001, APT-000001, cliente, ubicación…" oninput="renderControlOperaciones()"></div><select class="fsel" id="co-tipo" onchange="renderControlOperaciones()"><option value="">Vista de negocio</option><option value="operacion">Operaciones</option><option value="documento">Documentos</option><option value="financiero">Financieros</option><option value="auditoria">Auditoría técnica</option></select><label class="btn btn-out btn-sm" style="gap:6px"><input type="checkbox" id="co-tecnico" onchange="renderControlOperaciones()"> eventos técnicos</label></div>
       <div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Fecha</th><th>ID</th><th>Tipo</th><th>Cliente</th><th>Ubicación</th><th>Estado</th><th>Importe</th><th>Acciones</th></tr></thead><tbody id="co-tbody"></tbody></table></div></div>
     </div>
 
@@ -1307,6 +1307,7 @@
 <script src="business/migraciones197.business.js"></script>
 <script src="business/migraciones1971.business.js"></script>
 <script src="business/migraciones1972.business.js"></script>
+<script src="business/migraciones1973.business.js"></script>
 <script src="modules/operaciones-ui.module.js"></script> <!-- 1.95: UI del Motor de Operaciones -->
 <script src="modules/cobranza.module.js"></script>
 <script src="modules/cierre-acciones.module.js"></script>

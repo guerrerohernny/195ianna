@@ -201,3 +201,8 @@ Control global, multi-oportunidad, comisiones matriciales, coherencia del cierre
 ## Fase 1.97.2 — UI & Commission Logic Stabilization
 
 Estado: Entregada. Corrige navegación, modelo físico asignado, ventas históricas, Control de Operaciones con apertura documental y Motor de Comisiones v3 por Captación + Distribución temporal.
+
+
+## Fase 1.97.3 — Operational Stabilization + Commission Payroll Foundation
+
+Estado: entregada. Corrige scroll/layout de módulos, estabiliza el bloqueo de modelo físico en apartados, filtra el Control de Operaciones por vista de negocio, refuerza ventas históricas con nuevas oportunidades y consolida Comisiones v4 bajo Esquema Comercial Unificado.
