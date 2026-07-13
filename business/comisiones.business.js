@@ -359,7 +359,7 @@ window.IANNA_COM = (function(){
     else if(rol==='gerente'){pct=Number(politica.porcentajes?.gerente||0);partes=politica.distribucion_gerente||[];}
     else if(rol==='broker'){pct=Number(politica.porcentajes?.broker||0);partes=resolverDistribucion(ap,politica).partes||[];}
     const total=base*pct;
-    return {rol,base,porcentaje:pct,total,partes:partes.map(p=>({parte:p.parte,nombre:p.nombre||p.parte,evento:p.evento||p.parte,pct:Number(p.pct||0),monto:total*Number(p.pct||0)})),politica_version,esquema_id:esquema?.id||null,esquema_nombre:esquema?.nombre||null,canal:canalOperacion(ap),modalidad:modalidadOperacion(ap),es_broker:canalOperacion(ap)==='broker'};
+    return {rol,base,porcentaje:pct,total,partes:partes.map(p=>{const pv=p.pct_venta!=null?Number(p.pct_venta):null;const rel=pv!=null?(pct?pv/pct:0):Number(p.pct||0);return {parte:p.parte,nombre:p.nombre||p.parte,evento:p.evento||p.parte,pct:rel,pct_venta:pv,monto:pv!=null?base*pv:total*rel}}),politica_version,esquema_id:esquema?.id||null,esquema_nombre:esquema?.nombre||null,canal:canalOperacion(ap),modalidad:modalidadOperacion(ap),es_broker:canalOperacion(ap)==='broker'};
   }
 
   // Comisión completa del asesor. Devuelve el desglose por partes de la distribución.
@@ -372,7 +372,7 @@ window.IANNA_COM = (function(){
       if(ap.politica_snapshot && !ap?.financial_snapshot?.esquema_comision_id && Array.isArray(politica.distribucion_asesor) && politica.distribucion_asesor.length){
         v2.partes=politica.distribucion_asesor.map(p=>({parte:p.parte,nombre:p.nombre||p.parte,evento:p.evento||p.parte,pct:Number(p.pct||0),monto:v2.total*Number(p.pct||0)}));
       }else{
-        v2.partes=(v2.partes||[]).map(p=>({...p,monto:v2.total*Number(p.pct||0)}));
+        v2.partes=(v2.partes||[]).map(p=>({...p,monto:p.pct_venta!=null?v2.base*Number(p.pct_venta):v2.total*Number(p.pct||0)}));
       }
       return v2;
     }

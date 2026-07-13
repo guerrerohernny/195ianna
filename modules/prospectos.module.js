@@ -6,7 +6,7 @@
 // ================================================================
 // PROSPECTOS
 // ================================================================
-function renderProspectos(){ populateSelects(); filterProsp(); }
+function renderProspectos(){ populateSelects(); filterProsp(); renderVentasHistoricas(); }
 function filterProsp(){
   const q=($('s-prosp')?.value||'').toLowerCase();
   const se=$('f-est')?.value||'';
@@ -31,6 +31,7 @@ function filterProsp(){
   list.sort((a,b)=>new Date(b.fechaRegistro)-new Date(a.fechaRegistro));
   if(PVIEW==='lista') renderListaView(list);
   else renderKanbanView(list);
+  renderVentasHistoricas();
 }
 function setView(m){
   PVIEW=m;
@@ -46,6 +47,15 @@ function _historialPersona(pid){
   return {ventas,opos};
 }
 function _badgesHistorial(pid){ const h=_historialPersona(pid); return `${h.ventas.length?`<span class="badge" style="background:#ecfdf5;color:#047857;margin-top:4px">${h.ventas.length} venta${h.ventas.length>1?'s':''}</span>`:''}${h.opos.length?`<span class="badge" style="background:#eff6ff;color:#1d4ed8;margin-top:4px;margin-left:4px">${h.opos.length} oportunidad${h.opos.length>1?'es':''}</span>`:''}`; }
+
+function renderVentasHistoricas(){
+  const tb=$('ventas-historicas-tbody'), cnt=$('ventas-historicas-count'); if(!tb)return;
+  let ventas=DS.find('apartados').filter(a=>a.estatus==='Venta');
+  if(!AUTORIZADOR.puede('ver_global')) ventas=ventas.filter(a=>a.asesor===CU.id);
+  ventas.sort((a,b)=>new Date(b.fecha_venta||b.fecha_apartado||0)-new Date(a.fecha_venta||a.fecha_apartado||0));
+  if(cnt)cnt.textContent=String(ventas.length);
+  tb.innerHTML=ventas.length?ventas.map(v=>{const p=DS.findOne('prospectos',v.prospectoId)||{};return `<tr><td><b>${v.id_venta||v.id_publico||v.id}</b></td><td>${p.nombre||v.cliente_nombre||'—'}<div style="font-size:11px;color:var(--t3)">${p.id_cliente||''}</div></td><td>${v.clave_lote||'—'}</td><td>${v.modelo_nombre||getMod(v.modelo_id)?.nombre||'—'}</td><td>${fD(v.fecha_venta||v.fecha_apartado)}</td><td>${mxn(v.valor_operacion||IANNA_VALOR?.valorTotalVivienda?.(v)||0)}</td><td><button class="btn btn-out btn-xs" onclick="openDetalle('${v.prospectoId}')">Ver cliente</button></td></tr>`}).join(''):`<tr><td colspan="7"><div class="empty"><p>Aún no hay ventas históricas.</p></div></td></tr>`;
+}
 function renderListaView(list){
   const tb=$('prosp-tbody');
   if(!list.length){ tb.innerHTML=`<tr><td colspan="8"><div class="empty"><div class="empty-i">👥</div><p>Sin prospectos con estos filtros.</p></div></td></tr>`; return; }
@@ -245,8 +255,10 @@ function openDetalle(pid){
   const esOper=ESTATUS_OPERACION.includes(p.estatus);
   const opsPrev=DS.find('apartados').filter(a=>a.prospectoId===pid&&a.estatus==='Venta');
   const opos=typeof IANNA_OPO!=='undefined'?IANNA_OPO.dePersona(pid):[];
-  $('det-est-btns').innerHTML=(esOper?`<span class="badge" style="background:#1E3D0F;color:#fff;margin-right:6px">${p.estatus} — historial comercial protegido</span>`:'')
-    +(p.estatus==='Venta'?`<button class="btn btn-gold btn-xs" onclick="crearNuevaOportunidadPersona('${pid}')">+ Nueva oportunidad</button>`:ESTATUS_CRM.concat(ESTATUS_INACTIVOS).map(s=>`<button class="btn btn-xs ${p.estatus===s?'btn-navy':'btn-out'}" ${esOper?'disabled title="El estatus lo gobierna la Operación activa"':''} onclick="cambiarEstatus('${pid}','${s}')">${s}</button>`).join(''));
+  const puedeNuevaCompra=opsPrev.length>0;
+  $('det-est-btns').innerHTML=(esOper?`<span class="badge" style="background:#1E3D0F;color:#fff;margin-right:6px">${p.estatus} — operación actual protegida</span>`:'')
+    +(puedeNuevaCompra?`<button class="btn btn-gold btn-xs" onclick="crearNuevaOportunidadPersona('${pid}')">+ Nueva oportunidad</button>`:'')
+    +(!esOper?ESTATUS_CRM.concat(ESTATUS_INACTIVOS).map(s=>`<button class="btn btn-xs ${p.estatus===s?'btn-navy':'btn-out'}" onclick="cambiarEstatus('${pid}','${s}')">${s}</button>`).join(''):'');
   if(opsPrev.length||opos.length){
     const ventasHtml=opsPrev.length?`<div style="margin-top:8px"><b style="font-size:11px">VENTAS (histórico fijo)</b>${opsPrev.map(v=>`<div style="margin-top:5px;padding:7px;border:1px solid var(--bd);border-radius:8px;background:#f8fafc;font-size:11.5px"><b>${v.id_venta||v.id_publico||v.id}</b> · ${ubicacionLote(v.clave_lote)} · ${v.modelo_nombre||''}<br><span style="color:var(--t3)">${fD(v.fecha_venta||v.fecha_apartado)} · ${mxn(v.valor_operacion||0)}</span></div>`).join('')}</div>`:'';
     const oposAct=opos.filter(o=>!['Ganada','Perdida','Cancelada'].includes(o.estado));
@@ -264,9 +276,9 @@ function crearNuevaOportunidadPersona(pid){
   const fuente=prompt('Fuente de la nueva oportunidad:', 'Recompra')||'Recompra';
   const o=IANNA_OPO.crear({personaId:pid,proyectoId:'valle-de-aragon',estado:'Nueva',origen:fuente,asesor_asignado:p.asesor,broker_id:null,_motivo:'Nueva compra de cliente existente'});
   // compatibilidad UI: la Persona vuelve al pipeline sin alterar ventas históricas
-  prospectosService.actualizar(pid,{estatus:'Nuevo', oportunidad_activa_id:o.id, oportunidad_activa_publica:o.id_publico});
+  prospectosService.actualizar(pid,{estatus:'Nuevo', oportunidad_activa_id:o.id, oportunidad_activa_publica:o.id_publico, tiene_ventas_historicas:true, ventas_historicas_count:_historialPersona(pid).ventas.length});
   try{IANNA_MOTOR.auditar('oportunidades',o.id,'NUEVA_OPORTUNIDAD_RECOMPRA',{}, {personaId:pid,id_publico:o.id_publico,origen:fuente},'Cliente existente inicia nueva oportunidad');}catch(e){}
-  toast('Nueva oportunidad creada: '+o.id_publico,'ok',5000); closeM('m-det'); filterProsp(); renderDashboard();
+  toast('Nueva oportunidad creada: '+o.id_publico+'. La venta anterior permanece en Ventas históricas.','ok',5000); closeM('m-det'); filterProsp(); renderVentasHistoricas(); renderDashboard();
 }
 
 function renderTimeline(pid){

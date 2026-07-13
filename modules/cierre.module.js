@@ -39,13 +39,17 @@ function generarCierre(aid){
   const ECMAP={'Soltero':'Soltero(a)','Casado':'Casado(a)','Divorciado':'Divorciado','Viudo':'Viudo(a)','Unión libre':'Unión libre'};
   const estadoCivilProspecto = p?.estadoCivil ? (ECMAP[p.estadoCivil]||p.estadoCivil) : 'Soltero(a)';
 
+  // 1.97.5: datos maestros persistentes de Persona/Cliente.
+  const maestro=(p&&p.datos_maestros)||{};
   // Pre-fill client data from prospecto
   const _ecMap={'Soltero':'Soltero(a)','Casado':'Casado(a)','Divorciado':'Divorciado','Viudo':'Viudo(a)','Unión libre':'Unión libre'};
   if(p){
-    $('c-nombres').value = p.nombre||''; $('c-apellido-paterno').value=''; $('c-apellido-materno').value=''; syncNombreCierre();
+    $('c-nombres').value = maestro.nombres||p.nombre||''; $('c-apellido-paterno').value=maestro.apellido_paterno||''; $('c-apellido-materno').value=maestro.apellido_materno||''; syncNombreCierre();
     $('c-cel').value = p.telefono||'';
     $('c-email').value = p.correo||'';
-    $('c-estado-civil').value = _ecMap[p.estadoCivil]||p.estadoCivil||'Soltero(a)';
+    $('c-estado-civil').value = maestro.estadoCivil||_ecMap[p.estadoCivil]||p.estadoCivil||'Soltero(a)';
+    const mapMaestro={curp:'c-curp',rfc:'c-rfc',nacimiento:'c-nacimiento',sexo:'c-sexo',regimen:'c-regimen',lugarNac:'c-lugar-nac',nacionalidad:'c-nacionalidad',calle:'c-calle',colonia:'c-colonia',cp:'c-cp',ciudad:'c-ciudad',municipio:'c-municipio',conyugeNombre:'c-conyuge-nombre',conyugeCurp:'c-conyuge-curp',conyugeRfc:'c-conyuge-rfc',conyugeNac:'c-conyuge-nac',conyugeCel:'c-conyuge-cel'};
+    Object.entries(mapMaestro).forEach(([k,id])=>{if($(id)&&maestro[k]!=null)$(id).value=maestro[k];});
   }
   $('c-num-cliente').value = numCliente;
   $('c-ciudad').value = 'Culiacán';
@@ -180,11 +184,11 @@ function generarCierre(aid){
 function guardarDatosCierre(){
   if(!_cierreData){ toast('Abre un cierre primero','err'); return; }
   const cli = getClienteData();
-  apartadosService.actualizar( _cierreData.ap.id, {
-    datos_cierre: cli,
-    folio_recibo: IANNA_MOTOR.asegurarFolioCierre()
-  });
-  toast('Datos del cliente guardados ✓','ok');
+  const maestro={nombres:cli.nombres||'',apellido_paterno:cli.apellido_paterno||'',apellido_materno:cli.apellido_materno||'',curp:cli.curp||'',rfc:cli.rfc||'',nacimiento:cli.nacimiento||'',sexo:cli.sexo||'',estadoCivil:cli.estadoCivil||'',regimen:cli.regimen||'',lugarNac:cli.lugarNac||'',nacionalidad:cli.nacionalidad||'',calle:cli.calle||'',colonia:cli.colonia||'',cp:cli.cp||'',ciudad:cli.ciudad||'',municipio:cli.municipio||'',conyugeNombre:cli.conyugeNombre||'',conyugeCurp:cli.conyugeCurp||'',conyugeRfc:cli.conyugeRfc||'',conyugeNac:cli.conyugeNac||'',conyugeCel:cli.conyugeCel||'',actualizado_en:new Date().toISOString()};
+  if(_cierreData.p?.id) prospectosService.actualizar(_cierreData.p.id,{nombre:cli.nombre||_cierreData.p.nombre,telefono:cli.cel||_cierreData.p.telefono,correo:cli.email||_cierreData.p.correo,estadoCivil:cli.estadoCivil||_cierreData.p.estadoCivil,datos_maestros:maestro});
+  apartadosService.actualizar(_cierreData.ap.id,{datos_cierre:cli,folio_recibo:IANNA_MOTOR.asegurarFolioCierre()});
+  _cierreData.ap.datos_cierre=cli;
+  toast('Datos del cliente guardados y actualizados en la ficha maestra ✓','ok');
 }
 function getOrCreateNumCliente(prospectoId){
   const p=prospectosService.obtener(prospectoId);
@@ -215,6 +219,8 @@ function cierreTab(n){
   }
   if(n===2) updateCierrePreview();
   if(n===3) renderCobranza();
+  const sc=$('cierre-scroll')||$('cierre-modal')||$('m-cierre');
+  const reset=()=>{if(sc){sc.scrollTop=0;sc.scrollLeft=0;}}; reset(); requestAnimationFrame(reset); setTimeout(reset,0);
 }
 
 let _cierreGastos=[];
@@ -231,9 +237,16 @@ function onInstitucionChange(){
   const mixto=inst.tipo==='mixto';
   if($('c-publico-wrap')) $('c-publico-wrap').style.display=mixto?'':'none';
   if($('c-publico-label')) $('c-publico-label').textContent='Monto aportado por '+(inst.componente_publico||'componente público');
-  if(inst.tipo==='contado'){
-    $('c-credito').value=''; $('c-credito-pct').value='0.000';
+  const esContado=inst.tipo==='contado';
+  const pctEl=$('c-credito-pct'), montoEl=$('c-credito');
+  if(esContado){
+    if(pctEl)pctEl.value='0'; if(montoEl)montoEl.value='0';
+    if($('c-publico-monto'))$('c-publico-monto').value='0';
   }
+  if(pctEl)pctEl.disabled=esContado; if(montoEl)montoEl.disabled=esContado;
+  if($('c-publico-monto'))$('c-publico-monto').disabled=esContado||!mixto;
+  if(pctEl?.closest('.fg'))pctEl.closest('.fg').style.opacity=esContado?'.45':'1';
+  if(montoEl?.closest('.fg'))montoEl.closest('.fg').style.opacity=esContado?'.45':'1';
   if(_cierreData){
     const sugeridos=IANNA_VALOR.gastosSugeridos(_cierreData.ap,parseMoneyInput($('c-credito').value),inst.tipo);
     const prev=Array.isArray(_cierreGastos)?_cierreGastos:[];
@@ -244,13 +257,17 @@ function onInstitucionChange(){
     }).concat(manuales);
     renderGastosCierre();
   }
+  renderEsquemasComisionCierre();
+  calcCierre();
 }
 function syncCreditoDesdePct(){
+  const inst=IANNA_VALOR.institucion($('c-institucion')?.value); if(inst?.tipo==='contado')return onInstitucionChange();
   if(_syncCreditoLock||!_cierreData)return; _syncCreditoLock=true;
   const base=IANNA_VALOR.valorTotalVivienda(_cierreData.ap); const pct=Math.max(0,Math.min(100,parseFloat($('c-credito-pct').value)||0));
   $('c-credito').value=IANNA_FMT.MXN(base*pct/100).replace('$',''); _syncCreditoLock=false; calcCierre();
 }
 function syncCreditoDesdeMonto(){
+  const inst=IANNA_VALOR.institucion($('c-institucion')?.value); if(inst?.tipo==='contado')return onInstitucionChange();
   if(_syncCreditoLock||!_cierreData)return; _syncCreditoLock=true;
   const base=IANNA_VALOR.valorTotalVivienda(_cierreData.ap); const monto=parseMoneyInput($('c-credito').value);
   $('c-credito-pct').value=base?((monto/base)*100).toLocaleString('es-MX',{maximumFractionDigits:3}):'0'; _syncCreditoLock=false; calcCierre();
@@ -481,19 +498,23 @@ function renderDistribucionesCierre(){
 // 1.97.1 — resolución de esquema Modalidad × Canal
 // 1.97.2 — resolución Fuente de captación × Distribución temporal
 function renderEsquemasComisionCierre(){
-  const sel=$('c-distribucion-comision'); if(!sel||!_cierreData)return;
-  const pol=IANNA_COM.politicaActual(); const inst=IANNA_VALOR.institucion($('c-institucion')?.value)||{tipo:'credito'};
-  const mod=String(inst.tipo||'credito').toLowerCase()==='contado'?'contado':String(inst.tipo||'credito').toLowerCase();
-  const esquemas=(pol.esquemas_pago||[]).filter(e=>e.activo!==false&&(e.modalidad===mod||e.modalidad==='especial'));
-  const prev=sel.value; sel.innerHTML=esquemas.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
-  if(prev&&esquemas.some(e=>e.id===prev))sel.value=prev;else if(esquemas[0])sel.value=esquemas[0].id;
+  const sel=$('c-distribucion-comision'); if(!sel)return;
+  const pol=IANNA_COM.politicaActual();
+  const inst=IANNA_VALOR.institucion($('c-institucion')?.value);
+  const modalidad=inst?.tipo==='contado'?'contado':(inst?.tipo==='tradicional'||inst?.tipo==='mixto'?'credito':'especial');
+  const esquemas=(pol.esquemas_pago||[]).filter(e=>e.activo!==false&&(e.modalidad===modalidad||e.modalidad==='especial'));
+  const previo=_cierreData?.ap?.datos_cierre?.esquema_pago_id||sel.value;
+  sel.innerHTML=esquemas.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('')||'<option value="">Sin esquema compatible</option>';
+  if(esquemas.some(e=>e.id===previo))sel.value=previo;
   renderFuentesComisionCierre();
 }
 function renderFuentesComisionCierre(){
-  const pol=IANNA_COM.politicaActual(), esq=(pol.esquemas_pago||[]).find(e=>e.id===$('c-distribucion-comision')?.value), sel=$('c-fuente-comision'); if(!sel)return;
-  const ap=apartadosService.obtener(_cierreData?.ap?.id)||_cierreData?.ap||{}; const canal=IANNA_COM.canalOperacion(ap); const prev=sel.value;
-  sel.innerHTML=(esq?.fuentes||[]).filter(f=>f.activo!==false).map(f=>`<option value="${f.id}">${f.nombre}</option>`).join('');
-  const rec=(esq?.fuentes||[]).find(f=>f.canal===canal)||(esq?.fuentes||[])[0]; sel.value=(prev&&(esq?.fuentes||[]).some(f=>f.id===prev))?prev:(rec?.id||''); onFuenteComisionCierre();
+  const sel=$('c-fuente-comision'); if(!sel)return;
+  const pol=IANNA_COM.politicaActual(); const esquema=(pol.esquemas_pago||[]).find(e=>e.id===$('c-distribucion-comision')?.value);
+  const previo=_cierreData?.ap?.datos_cierre?.fuente_comision_id||sel.value;
+  sel.innerHTML=(esquema?.fuentes||[]).map(f=>`<option value="${f.id}">${f.nombre}</option>`).join('')||'<option value="">Sin fuentes configuradas</option>';
+  if((esquema?.fuentes||[]).some(f=>f.id===previo))sel.value=previo;
+  onFuenteComisionCierre();
 }
 function onFuenteComisionCierre(){
   const pol=IANNA_COM.politicaActual(), esq=(pol.esquemas_pago||[]).find(e=>e.id===$('c-distribucion-comision')?.value), f=(esq?.fuentes||[]).find(x=>x.id===$('c-fuente-comision')?.value);

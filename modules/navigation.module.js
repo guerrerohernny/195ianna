@@ -12,10 +12,10 @@ function navTo(page,el){
   $('tb-t').textContent=T[page]||page;
   const R={dashboard:renderDashboard,prospectos:renderProspectos,inventario:renderInventario,apartados:renderApartados,ingresos:renderIngresos,reportes:renderReportes,parametros:renderParametros,perfil:renderPerfil,configuracion:renderConfiguracion,brokers:renderBrokers,auditoria:renderAuditoria,'control-operaciones':renderControlOperaciones,cotizador:renderCotizador,whatsapp:renderWhatsApp};
   if(R[page]) R[page]();
-  // 1.97.3: al cambiar de módulo reiniciar scroll para evitar módulos aparentemente vacíos/corridos.
-  try{ window.scrollTo({top:0,left:0,behavior:'instant'}); }catch(e){ try{window.scrollTo(0,0);}catch(_){} }
-  try{ document.querySelector('.main')?.scrollTo?.(0,0); }catch(e){}
-  try{ document.querySelector('.sb-nav')?.scrollTo?.(0,0); }catch(e){}
+  // 1.97.5: MainViewport es la única superficie desplazable. Restaurar DESPUÉS del render.
+  const viewport=document.getElementById('main-viewport')||document.querySelector('.main');
+  const reset=()=>{ if(viewport){viewport.scrollTop=0;viewport.scrollLeft=0;} if(pg){pg.scrollTop=0;pg.scrollLeft=0;} };
+  reset(); requestAnimationFrame(reset); setTimeout(reset,0);
   if(window.innerWidth<768) $('sidebar').classList.remove('open');
 }
 
