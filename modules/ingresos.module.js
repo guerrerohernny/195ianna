@@ -66,6 +66,7 @@ function renderIngresos(){
   const container = $('ing-cont');
   if(!container) return;
   container.innerHTML = '';
+  const nominaPanel=isAdmin?renderNominaComisionesPanel():'';
 
   // Header cards
   const headerHtml = `
@@ -166,18 +167,18 @@ function renderIngresos(){
     </div>`;
   })() : '';
 
-  container.innerHTML = headerHtml + tableHtml + equipoHtml;
+  container.innerHTML = nominaPanel + headerHtml + tableHtml + equipoHtml;
 }
 
 function cobrarComisionParte(ventaId, parteKey, quien){
-  const ap=apartadosService.obtener(ventaId); if(!ap){toast('Venta no encontrada','err');return;}
-  const motor=quien==='ger'?IANNA_COM.comisionGerente(ap):IANNA_COM.comisionAsesor(ap);
-  const pt=(motor.partes||[]).find(x=>(x.parte||'')===parteKey); if(!pt){toast('Parte de comisión no encontrada','err');return;}
-  if(!confirm(`¿Confirmar cobro de ${pt.nombre||pt.parte} por ${mxn(pt.monto)}?`)) return;
-  const mapa={...(ap.comision_partes_cobradas||{})}; mapa[quien+':'+parteKey]=true;
-  apartadosService.actualizar(ventaId,{comision_partes_cobradas:mapa,comision_ultima_actualizacion:new Date().toISOString()});
-  try{IANNA_MOTOR.auditar('comisiones',ventaId,'COBRAR_PARTE_COMISION',{}, {quien,parte:parteKey,monto:pt.monto},'Cobro de parte de comisión');}catch(e){}
-  renderIngresos(); toast('Parte de comisión marcada como cobrada ✓','ok');
+  const ap=apartadosService.obtener(ventaId);if(!ap){toast('Venta no encontrada','err');return}
+  const motor=quien==='ger'?IANNA_COM.comisionGerente(ap):quien==='broker'?IANNA_COM.comisionBroker(ap):IANNA_COM.comisionAsesor(ap);
+  const pt=(motor.partes||[]).find(x=>(x.parte||'')===parteKey);if(!pt){toast('Parte no encontrada','err');return}
+  const existe=comisionesNominaService.lineas().find(x=>x.operacion_id===ventaId&&x.rol===quien&&x.parte===parteKey&&x.estado!=='cancelada');
+  if(existe){toast('Esta parte ya está en la nómina: '+existe.estado,'warn');return}
+  const beneficiario=quien==='ger'?(getP().gerente||CU.nombre):quien==='broker'?(DS.findOne('brokers',ap.broker_comision_id||ap.broker_id)?.nombre||'Bróker'):(getUser(ap.asesor).nombre);
+  comisionesNominaService.crearLinea({id_publico:'COM-'+String(Date.now()).slice(-6),operacion_id:ventaId,venta_id:ap.id_venta||ap.id_publico,persona_id:ap.prospectoId,beneficiario,rol:quien,parte:parteKey,parte_nombre:pt.nombre||pt.parte,monto:Number(pt.monto||0),estado:'elegible',fecha_elegible:new Date().toISOString(),esquema_id:motor.esquema_id,esquema_nombre:motor.esquema_nombre});
+  renderIngresos();toast('Comisión agregada a pendientes de nómina ✓','ok');
 }
 // Compatibilidad con botones históricos
 function cobrarComision(ventaId, parte, quien){
@@ -185,3 +186,11 @@ function cobrarComision(ventaId, parte, quien){
   const pt=(motor.partes||[])[Math.max(0,Number(parte)-1)]; if(pt) cobrarComisionParte(ventaId,pt.parte,quien);
 }
 
+
+function renderNominaComisionesPanel(){
+  const lineas=comisionesNominaService.lineas(),pend=lineas.filter(x=>x.estado==='elegible'),encorte=lineas.filter(x=>x.estado==='en_corte'),pagadas=lineas.filter(x=>x.estado==='pagada');
+  const total=a=>a.reduce((s,x)=>s+Number(x.monto||0),0);
+  return `<div class="card" style="margin-bottom:14px;border-left:5px solid var(--gold)"><div style="display:flex;justify-content:space-between;align-items:center"><div><b>Nómina de comisiones</b><div style="font-size:11px;color:var(--t3)">El botón Cobrar agrega una línea elegible; el gerente agrupa líneas en un corte y después confirma su pago.</div></div><button class="btn btn-gold btn-sm" ${pend.length?'':'disabled'} onclick="crearCorteComisiones()">Crear corte (${pend.length})</button></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px"><div class="kpi"><small>Elegibles</small><b>${mxn(total(pend))}</b></div><div class="kpi"><small>En corte</small><b>${mxn(total(encorte))}</b></div><div class="kpi"><small>Pagadas</small><b>${mxn(total(pagadas))}</b></div></div>${comisionesNominaService.cortes().slice(-5).reverse().map(c=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--bd);margin-top:7px"><span><b>${c.id_publico}</b> · ${c.estado}</span><span>${mxn(c.total)} ${c.estado==='borrador'?`<button class="btn btn-out btn-xs" onclick="pagarCorteComisiones('${c.id}')">Confirmar pago</button>`:''}</span></div>`).join('')}</div>`;
+}
+function crearCorteComisiones(){const ls=comisionesNominaService.lineas().filter(x=>x.estado==='elegible');if(!ls.length)return;const total=ls.reduce((s,x)=>s+Number(x.monto||0),0),c=comisionesNominaService.crearCorte({id_publico:'NOM-'+String(Date.now()).slice(-6),estado:'borrador',fecha:new Date().toISOString(),lineas:ls.map(x=>x.id),total,usuario:CU.id});ls.forEach(x=>comisionesNominaService.actualizarLinea(x.id,{estado:'en_corte',corte_id:c.id}));renderIngresos();toast('Corte creado: '+c.id_publico,'ok')}
+function pagarCorteComisiones(id){const c=comisionesNominaService.cortes().find(x=>x.id===id);if(!c)return;if(!confirm(`Confirmar pago de ${c.id_publico} por ${mxn(c.total)}?`))return;comisionesNominaService.actualizarCorte(id,{estado:'pagado',fecha_pago:new Date().toISOString(),pagado_por:CU.id});(c.lineas||[]).forEach(l=>comisionesNominaService.actualizarLinea(l,{estado:'pagada',fecha_pago:new Date().toISOString()}));renderIngresos();toast('Nómina marcada como pagada ✓','ok')}

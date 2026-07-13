@@ -8,56 +8,32 @@
 // ════════════════════════════════════════════════════════════════
 function _cobDatos(){
   const ap=apartadosService.obtener(_cierreData.ap.id)||_cierreData.ap;
-  const pagos=ap.pagos||[]; // solo datos documentales (folio/método/concepto) — los MONTOS salen del ledger
-  // ── 1.95 (Etapa 4): el LEDGER es la única fuente de saldo y de efectivo (ADR-011).
-  //    ap.pagos[] queda como snapshot documental de recibos; jamás vuelve a sumar dinero. ──
+  const pagos=ap.pagos||[];
+  const ledger=IANNA_FIN.movimientosDe(ap.id)||[];
   const aportado=IANNA_FIN.ingresosNetosOperacion(ap.id);
-  const efectivo=IANNA_FIN.efectivoOperacion(ap.id);
-  const P=getP();
-  const topeEfectivo=8025*(P.uma_diaria||117.31);
-  const vTotalOp=_cierreData.vTotalOp||ap.total_operacion||0;
-  const descuento=_cierreData.descuento||0, credito=_cierreData.credito||0;
-  const pendiente=Math.max(0, vTotalOp-descuento-credito-aportado);
-  const hoy=new Date(); hoy.setHours(0,0,0,0);
-  const vencidos=(_cierreData.pagares||[]).filter(p=>p.fecha<hoy);
-  return {ap,pagos,aportado,efectivo,topeEfectivo,vTotalOp,pendiente,vencidos};
+  // Efectivo documental + ledger, deduplicado por folio/documento para incluir apartado y pago adicional.
+  const efDocs=[];
+  if(String(ap.metodo_pago||'').toLowerCase().includes('efect')) efDocs.push({key:'apartado',monto:Number(ap.monto_enganche||0)});
+  pagos.filter(x=>String(x.metodo||'').toLowerCase().includes('efect')).forEach(x=>efDocs.push({key:String(x.folio||x.id),monto:Number(x.monto||0)}));
+  const fs=ap.financial_snapshot||{}; if(Number(fs.pago_adicional||0)>0&&String(fs.forma_pago_adicional||'').toLowerCase().includes('efect'))efDocs.push({key:'adicional',monto:Number(fs.pago_adicional||0)});
+  const seen=new Set(); let efectivo=0; efDocs.forEach(x=>{if(!seen.has(x.key)){seen.add(x.key);efectivo+=x.monto}});
+  ledger.filter(x=>x.tipo==='ingreso'&&String(x.metodo||'').toLowerCase().includes('efect')).forEach(x=>{const k=String(x.documento||x.id_publico||x.id);if(!seen.has(k)){seen.add(k);efectivo+=Number(x.monto||0)}});
+  const P=getP(), topeEfectivo=8025*(P.uma_diaria||117.31);
+  const baseCasa=Number(ap.financial_snapshot?.base_comisionable_snapshot?.total||IANNA_COM.baseComisionable(ap).base||ap.valor_operacion||0);
+  const totalAdeudo=Number(ap.financial_snapshot?.desembolso ?? Math.max(0,Number(ap.financial_snapshot?.valor_total_financiero||ap.total_operacion||0)-Number(ap.financial_snapshot?.credito_monto||0)));
+  const pendiente=Math.max(0,totalAdeudo-aportado), excedente=Math.max(0,aportado-totalAdeudo);
+  const hoy=new Date();hoy.setHours(0,0,0,0);const vencidos=(_cierreData.pagares||[]).filter(p=>new Date(p.fecha)<hoy);
+  return {ap,pagos,ledger,aportado,efectivo,topeEfectivo,baseCasa,totalAdeudo,pendiente,excedente,vencidos};
 }
 function renderCobranza(){
-  if(!_cierreData) return;
-  const d=_cobDatos();
-  if(!$('cob-fecha').value) $('cob-fecha').value=new Date().toISOString().split('T')[0];
-  $('cob-kpis').innerHTML=[
-    {lbl:'Total operación',val:mxn(d.vTotalOp),bg:'#f1f5f9',fg:'#0f172a'},
-    {lbl:'Aportado (apartado + pagos)',val:mxn(d.aportado),bg:'#d1fae5',fg:'#065f46'},
-    {lbl:'Pendiente',val:mxn(d.pendiente),bg:'#fef9c3',fg:'#854d0e'},
-    {lbl:'Pagarés vencidos',val:d.vencidos.length+(d.vencidos.length?' — '+mxn(d.vencidos.reduce((s,p)=>s+p.monto,0)):''),bg:d.vencidos.length?'#fee2e2':'#f1f5f9',fg:d.vencidos.length?'#991b1b':'#0f172a'},
-  ].map(k=>`<div style="background:${k.bg};color:${k.fg};border-radius:8px;padding:10px 12px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.75">${k.lbl}</div><div style="font-size:16px;font-weight:800;margin-top:2px">${k.val}</div></div>`).join('');
-  // Alerta de efectivo (8,025 UMA — LFPIORPI)
-  const pct=d.topeEfectivo>0?Math.min(100,Math.round(d.efectivo/d.topeEfectivo*100)):0;
-  const nivel=d.efectivo>=d.topeEfectivo?'rojo':(pct>=70?'ambar':'ok');
-  const col=nivel==='rojo'?{bg:'#fee2e2',bd:'#fecaca',fg:'#991b1b',bar:'#dc2626'}:nivel==='ambar'?{bg:'#fef3c7',bd:'#fde68a',fg:'#92400e',bar:'#f59e0b'}:{bg:'#f0fdf4',bd:'#bbf7d0',fg:'#166534',bar:'#16a34a'};
-  $('cob-efectivo').innerHTML=`<div style="background:${col.bg};border:1px solid ${col.bd};border-radius:8px;padding:12px 14px">
-    <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:${col.fg}">
-      <div><b>💵 Efectivo recibido:</b> ${mxn(d.efectivo)} de ${mxn(d.topeEfectivo)} permitidos (8,025 UMA — LFPIORPI)</div>
-      <div style="font-weight:800">${pct}%</div>
-    </div>
-    <div style="background:rgba(0,0,0,.08);border-radius:20px;height:8px;margin-top:8px;overflow:hidden"><div style="background:${col.bar};height:100%;width:${pct}%;border-radius:20px;transition:width .4s"></div></div>
-    ${nivel==='rojo'?'<div style="font-size:12px;font-weight:700;color:#991b1b;margin-top:6px">⚠️ LÍMITE LFPIORPI EXCEDIDO — no se puede recibir más efectivo por esta operación</div>':nivel==='ambar'?'<div style="font-size:11.5px;color:#92400e;margin-top:6px">⚠️ Advertencia: te acercas al tope legal de efectivo para esta operación</div>':''}
-  </div>`;
-  // Lista de pagos
-  $('cob-lista').innerHTML=!d.pagos.length
-    ?'<div style="padding:20px;text-align:center;color:var(--t3);font-size:13px">Sin pagos registrados aún — el apartado inicial ('+mxn(d.ap.monto_enganche||0)+' · '+(d.ap.metodo_pago||'Transferencia')+') ya cuenta como aportado.</div>'
-    :`<table style="width:100%;border-collapse:collapse;font-size:12.5px">
-      <thead><tr style="background:var(--s2)">${['Fecha','Concepto','Método','Monto','Folio',''].map(h=>`<th style="padding:8px 12px;text-align:left;font-size:10.5px;color:var(--t3);text-transform:uppercase">${h}</th>`).join('')}</tr></thead>
-      <tbody>${d.pagos.slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).map(p=>`<tr style="border-bottom:1px solid var(--s2)">
-        <td style="padding:9px 12px">${new Date(p.fecha+'T12:00:00').toLocaleDateString('es-MX')}</td>
-        <td style="padding:9px 12px">${p.concepto}</td>
-        <td style="padding:9px 12px">${p.metodo==='Efectivo'?'💵 ':''}${p.metodo}</td>
-        <td style="padding:9px 12px;font-weight:700">${mxn(p.monto)}</td>
-        <td style="padding:9px 12px">${String(p.folio).padStart(8,'0')}</td>
-        <td style="padding:9px 12px"><button class="btn btn-out btn-xs" onclick="reabrirReciboPago('${d.ap.id}','${p.id}')">🧾 Recibo</button></td>
-      </tr>`).join('')}</tbody></table>`;
-}
+  if(!_cierreData)return;const d=_cobDatos();if(!$('cob-fecha').value)$('cob-fecha').value=new Date().toISOString().split('T')[0];
+  $('cob-kpis').innerHTML=[{lbl:'Base comercial',val:mxn(d.baseCasa)},{lbl:'Total a cubrir',val:mxn(d.totalAdeudo)},{lbl:'Pagado',val:mxn(d.aportado)},{lbl:d.excedente>0?'Saldo a favor':'Saldo pendiente',val:mxn(d.excedente||d.pendiente)}].map(k=>`<div class="card" style="padding:11px"><div style="font-size:10px;color:var(--t3);text-transform:uppercase">${k.lbl}</div><div style="font-size:17px;font-weight:800">${k.val}</div></div>`).join('');
+  const pct=d.topeEfectivo>0?Math.round(d.efectivo/d.topeEfectivo*100):0,bar=Math.min(100,pct),exc=pct>100; const col=exc?'#dc2626':pct>=70?'#f59e0b':'#16a34a';
+  $('cob-efectivo').innerHTML=`<div style="border:1px solid ${exc?'#fecaca':'#bbf7d0'};border-radius:8px;padding:12px;background:${exc?'#fee2e2':'#f0fdf4'}"><div style="display:flex;justify-content:space-between"><div><b>💵 Efectivo acumulado:</b> ${mxn(d.efectivo)} de ${mxn(d.topeEfectivo)} (8,025 UMA — LFPIORPI)</div><b>${pct}%</b></div><div style="height:8px;background:#e5e7eb;border-radius:20px;margin-top:8px;overflow:hidden"><div style="height:100%;width:${bar}%;background:${col}"></div></div>${exc?`<div style="color:#991b1b;font-weight:800;margin-top:6px">⚠️ Exceso de efectivo: ${mxn(d.efectivo-d.topeEfectivo)}</div>`:''}<div style="font-size:10.5px;color:var(--t3);margin-top:5px">La base de la operación se muestra separada; el límite legal se calcula por UMA vigente y el acumulado incluye apartado, pago adicional y cobranza en efectivo.</div></div>`;
+  const rows=[{fecha:d.ap.fecha_apartado,concepto:'Apartado',metodo:d.ap.metodo_pago,monto:Number(d.ap.monto_enganche||0),folio:d.ap.folio},...d.pagos];
+  if(Number(d.ap.financial_snapshot?.pago_adicional||0)>0)rows.push({fecha:(d.ap.financial_snapshot.creado_en||'').slice(0,10),concepto:'Pago adicional',metodo:d.ap.financial_snapshot.forma_pago_adicional,monto:Number(d.ap.financial_snapshot.pago_adicional),folio:d.ap.recibo_pago_adicional});
+  $('cob-lista').innerHTML=`<div style="font-weight:800;margin-bottom:8px">Estado de cuenta</div><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>${['Fecha','Concepto','Método','Cargo','Abono','Saldo','Folio',''].map(h=>`<th style="padding:8px;text-align:left;background:var(--s2)">${h}</th>`).join('')}</tr></thead><tbody>${(()=>{let saldo=d.totalAdeudo;return rows.filter(x=>Number(x.monto||0)>0).sort((a,b)=>new Date(a.fecha||0)-new Date(b.fecha||0)).map(x=>{saldo-=Number(x.monto||0);return `<tr style="border-bottom:1px solid var(--bd)"><td style="padding:8px">${x.fecha?fD(x.fecha):'—'}</td><td>${x.concepto||'Pago'}</td><td>${x.metodo||'—'}</td><td>—</td><td style="font-weight:700;color:#047857">${mxn(x.monto)}</td><td style="font-weight:700;color:${saldo<0?'#b45309':'inherit'}">${saldo<0?'A favor '+mxn(Math.abs(saldo)):mxn(saldo)}</td><td>${x.folio?String(x.folio).padStart(8,'0'):'—'}</td><td>${x.id?`<button class="btn btn-out btn-xs" onclick="reabrirReciboPago('${d.ap.id}','${x.id}')">Recibo</button>`:''}</td></tr>`}).join('')})()}</tbody></table>${d.pendiente===0?'<div class="ali info" style="margin-top:10px">✅ Cuenta liquidada. Los pagarés pueden liberarse conforme al flujo autorizado.</div>':''}`;
+} 
 function registrarPagoCobranza(){
   if(!_cierreData) return;
   const monto=parseMoneyInput($('cob-monto').value);
@@ -67,6 +43,7 @@ function registrarPagoCobranza(){
   if(!monto||monto<=0){ toast('Captura el monto del pago','err'); return; }
   if(!fecha){ toast('Captura la fecha del pago','err'); return; }
   const d=_cobDatos();
+  if(monto>d.pendiente&&d.pendiente>0){ if(!confirm(`El pago supera el saldo pendiente por ${mxn(monto-d.pendiente)}. Se registrará como saldo a favor. ¿Continuar?`)) return; }
   if(metodo==='Efectivo'&&(d.efectivo+monto)>d.topeEfectivo){
     if(!confirm(`⚠️ ALERTA LFPIORPI\n\nCon este pago el efectivo acumulado sería ${mxn(d.efectivo+monto)}, superando el tope legal de ${mxn(d.topeEfectivo)} (8,025 UMA).\n\nRecibir este efectivo implica sanciones conforme a la ley.\n\n¿Registrar de todas formas?`)) return;
   }

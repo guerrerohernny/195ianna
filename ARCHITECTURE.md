@@ -206,3 +206,7 @@ El pago adicional usa folio idempotente y ledger append-only. Las correcciones s
 - Ubicación: `M0000-L0000`
 
 Las claves operativas antiguas siguen existiendo únicamente como referencias internas transitorias del runtime 1.x; no deben presentarse al usuario. Su sustitución por relaciones de entidad con `empresa_id`/`proyecto_id` pertenece a Fase 2.
+
+## Apéndice 1.97.4
+
+La política de comisión se representa como `esquemas_pago[]`. Cada esquema contiene modalidad y `fuentes[]`; cada fuente congela porcentajes y distribuciones independientes para asesor, gerente y tercero. Las distribuciones aceptan de una a cuatro partes y cada rol con porcentaje mayor a cero debe sumar 100%. `comisiones_nomina` contiene líneas elegibles/en corte/pagadas; `cortes_comision` agrupa y liquida líneas sin mutar el historial. Cobranza usa el ledger para el saldo y reconstruye el efectivo documental por folio para incluir apartado y pago adicional sin duplicarlos.

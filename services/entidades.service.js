@@ -109,3 +109,14 @@ window.configService = {
   obtenerExt: (clave, def) => DS.getExt(clave, def),
   guardarExt: (clave, val) => DS.setExt(clave, val),
 };
+
+
+// Fase 1.97.4 — comisiones devengadas, cortes y pagos de comisión.
+window.comisionesNominaService = {
+  lineas: (f) => DS.find('comisiones_nomina', f),
+  crearLinea: (d) => DS.create('comisiones_nomina', d),
+  actualizarLinea: (id,d) => DS.update('comisiones_nomina', id, d),
+  cortes: (f) => DS.find('cortes_comision', f),
+  crearCorte: (d) => DS.create('cortes_comision', d),
+  actualizarCorte: (id,d) => DS.update('cortes_comision', id, d),
+};

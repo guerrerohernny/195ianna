@@ -266,6 +266,17 @@ window.IANNA_COM = (function(){
   }
   function esquemasComercialesDisponibles(politica){
     const p=politica||politicaActual();
+    // 1.97.4: el esquema padre contiene fuentes; se aplana solo para el motor/cierre.
+    if(Array.isArray(p.esquemas_pago)&&p.esquemas_pago.length){
+      const out=[];
+      p.esquemas_pago.filter(e=>e.activo!==false).forEach(e=>(e.fuentes||[]).filter(f=>f.activo!==false).forEach(f=>out.push({
+        id:`${e.id}::${f.id}`,esquema_id:e.id,fuente_id:f.id,nombre:`${e.nombre} — ${f.nombre}`,
+        modalidad:e.modalidad||'especial',canal:f.canal||f.id||'directo',fuente:f.nombre||f.id,
+        porcentajes:{asesor:Number(f.porcentajes?.asesor||0),gerente:Number(f.porcentajes?.gerente||0),broker:Number(f.porcentajes?.broker||f.porcentajes?.tercero||0),tercero:Number(f.porcentajes?.tercero||f.porcentajes?.broker||0)},
+        tercero_tipo:f.tercero_tipo||'',distribuciones:f.distribuciones||{},partes:(f.distribuciones?.asesor||[])
+      })));
+      return out;
+    }
     if(Array.isArray(p.esquemas_comerciales)&&p.esquemas_comerciales.length) return p.esquemas_comerciales;
     const caps=esquemasCaptacionDisponibles(p);
     const dists=distribucionesTemporalesDisponibles(p);
@@ -315,7 +326,7 @@ window.IANNA_COM = (function(){
         return {
           id:matched.id,nombre:matched.nombre,modalidad:matched.modalidad,canal:matched.canal,fuente:matched.fuente||'',
           porcentajes:{asesor:Number(matched.porcentajes?.asesor||0),gerente:Number(matched.porcentajes?.gerente||0),broker:Number(matched.porcentajes?.broker||matched.porcentajes?.tercero||0),tercero:Number(matched.porcentajes?.tercero||matched.porcentajes?.broker||0)},
-          tercero_tipo:matched.tercero_tipo||'',partes:_normalizarPctPartes(matched.partes||[]), esquema_comercial:true
+          tercero_tipo:matched.tercero_tipo||'',distribuciones:matched.distribuciones||{},partes:_normalizarPctPartes(matched.partes||[]), esquema_comercial:true
         };
       }
     }
@@ -343,7 +354,7 @@ window.IANNA_COM = (function(){
   function comisionBeneficiario(ap,rol){
     const politica=ap.politica_snapshot||politicaActual(); const {base,politica_version}=baseComisionable(ap); const esquema=resolverEsquema(ap,politica);
     let pct=0, partes=[];
-    if(esquema){pct=Number(esquema.porcentajes?.[rol]||0);partes=esquema.partes||[];}
+    if(esquema){pct=Number(esquema.porcentajes?.[rol]||0);partes=(esquema.distribuciones?.[rol]||esquema.distribuciones?.tercero||esquema.partes||[]);}
     else if(rol==='asesor') return null;
     else if(rol==='gerente'){pct=Number(politica.porcentajes?.gerente||0);partes=politica.distribucion_gerente||[];}
     else if(rol==='broker'){pct=Number(politica.porcentajes?.broker||0);partes=resolverDistribucion(ap,politica).partes||[];}

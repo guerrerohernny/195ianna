@@ -346,7 +346,7 @@ function calcCierre(opts){ opts=opts||{};
   _cierreData.vDesembolso = vDesembolso;
   _cierreData.pagares = pagares;
   _cierreData.plazo = plazo;
-  const apCalc={...ap,datos_cierre:{...(ap.datos_cierre||{}),fin_descuento:String(descuento),tipoCredito:inst.tipo,esquema_comision_id:$('c-distribucion-comision')?.value||''},financial_snapshot:{...(ap.financial_snapshot||{}),tipo_financiamiento:inst.tipo,esquema_comision_id:$('c-distribucion-comision')?.value||''}};
+  const apCalc={...ap,datos_cierre:{...(ap.datos_cierre||{}),fin_descuento:String(descuento),tipoCredito:inst.tipo,esquema_comision_id:(($('c-distribucion-comision')?.value||'')+'::'+($('c-fuente-comision')?.value||'')), esquema_pago_id:$('c-distribucion-comision')?.value||'', fuente_comision_id:$('c-fuente-comision')?.value||'', broker_comision_id:$('c-broker-comision')?.value||'', recomendador_nombre:$('c-recomendador')?.value||''},financial_snapshot:{...(ap.financial_snapshot||{}),tipo_financiamiento:inst.tipo,esquema_comision_id:(($('c-distribucion-comision')?.value||'')+'::'+($('c-fuente-comision')?.value||'')), esquema_pago_id:$('c-distribucion-comision')?.value||'', fuente_comision_id:$('c-fuente-comision')?.value||'', broker_comision_id:$('c-broker-comision')?.value||'', recomendador_nombre:$('c-recomendador')?.value||''}};
   const comCalc=IANNA_COM.comisionAsesor(apCalc);
   _cierreData.financialSnapshot=IANNA_VALOR.snapshot(ap,{
     gastos:gastosCalc, apartado, descuento, pago_adicional:pagoAdic, forma_pago_adicional:$('c-forma-pago')?.value||'',
@@ -356,7 +356,7 @@ function calcCierre(opts){ opts=opts||{};
     complemento_bancario:_cierreData.complementoBancario, desembolso:vDesembolso,
     base_comisionable:comCalc.base, base_snapshot:(()=>{const d=IANNA_VALOR.desglose(apCalc);return {precio_vivienda:d.vivienda,excedente_terreno:d.excedente,fraccion_fusionada:d.fraccion_fusionada,lote_adicional:d.lote_adicional,construccion_adicional:d.construccion_adicional,plusvalia:d.plusvalia,descuento,bruto:vTotalVivienda,total:comCalc.base};})(), politica_version:comCalc.politica_version,
     regla_especial_aplicada:comCalc.regla_especial_aplicada, porcentaje_comision:comCalc.porcentaje,
-    distribucion_comision_id:$('c-distribucion-comision')?.value||'', esquema_comision_id:$('c-distribucion-comision')?.value||'', distribucion_comision:comCalc.partes
+    distribucion_comision_id:$('c-distribucion-comision')?.value||'', esquema_comision_id:(($('c-distribucion-comision')?.value||'')+'::'+($('c-fuente-comision')?.value||'')), esquema_pago_id:$('c-distribucion-comision')?.value||'', fuente_comision_id:$('c-fuente-comision')?.value||'', broker_comision_id:$('c-broker-comision')?.value||'', recomendador_nombre:$('c-recomendador')?.value||'', distribucion_comision:comCalc.partes
   });
 
   if($('c-complemento')) $('c-complemento').textContent = inst.tipo==='mixto' ? ('Financiamiento total: '+IANNA_FMT.MXN(credito)+' · Crédito bancario: '+IANNA_FMT.MXN(_cierreData.complementoBancario)) : '';
@@ -482,27 +482,22 @@ function renderDistribucionesCierre(){
 // 1.97.2 — resolución Fuente de captación × Distribución temporal
 function renderEsquemasComisionCierre(){
   const sel=$('c-distribucion-comision'); if(!sel||!_cierreData)return;
-  const ap=apartadosService.obtener(_cierreData.ap.id)||_cierreData.ap;
-  const pol=IANNA_COM.politicaActual();
-  const inst=IANNA_VALOR.institucion($('c-institucion')?.value)||{tipo:'credito'};
-  const mod=String(inst.tipo||'credito').toLowerCase()==='contado'?'contado':'credito';
-  const canal=IANNA_COM.canalOperacion(ap);
-  const comerciales=(IANNA_COM.esquemasComercialesDisponibles?IANNA_COM.esquemasComercialesDisponibles(pol):[]).filter(e=>e.modalidad===mod||e.modalidad==='especial');
-  const prev=sel.value;
-  let opts=[];
-  if(comerciales.length){
-    const recom=comerciales.find(e=>e.canal===canal)||comerciales.find(e=>e.canal==='directo')||comerciales[0];
-    if(recom) opts.push({value:recom.id,label:recom.nombre});
-    comerciales.filter(e=>!recom||e.id!==recom.id).forEach(e=>opts.push({value:e.id,label:e.nombre}));
-  }else{
-    const caps=(IANNA_COM.esquemasCaptacionDisponibles(pol)||[]);
-    const dists=(IANNA_COM.distribucionesTemporalesDisponibles(pol)||[]).filter(d=>d.modalidad===mod||d.modalidad==='especial');
-    const capRecom=caps.find(c=>c.canal===canal)||caps.find(c=>c.canal==='directo')||caps[0];
-    (capRecom?[capRecom]:caps).forEach(c=>dists.forEach(d=>opts.push({value:`${c.id}|${d.id}`,label:`${c.nombre||c.fuente} · ${d.nombre}`})));
-    caps.filter(c=>!capRecom||c.id!==capRecom.id).forEach(c=>dists.forEach(d=>opts.push({value:`${c.id}|${d.id}`,label:`${c.nombre||c.fuente} · ${d.nombre}`})));
-  }
-  sel.innerHTML=opts.map(o=>`<option value="${o.value}">${o.label}</option>`).join('');
-  if(prev&&opts.some(o=>o.value===prev)) sel.value=prev; else if(opts[0]) sel.value=opts[0].value;
-  const lab=sel.closest('.fg')?.querySelector('label'); if(lab) lab.textContent='Esquema comercial de comisión';
+  const pol=IANNA_COM.politicaActual(); const inst=IANNA_VALOR.institucion($('c-institucion')?.value)||{tipo:'credito'};
+  const mod=String(inst.tipo||'credito').toLowerCase()==='contado'?'contado':String(inst.tipo||'credito').toLowerCase();
+  const esquemas=(pol.esquemas_pago||[]).filter(e=>e.activo!==false&&(e.modalidad===mod||e.modalidad==='especial'));
+  const prev=sel.value; sel.innerHTML=esquemas.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
+  if(prev&&esquemas.some(e=>e.id===prev))sel.value=prev;else if(esquemas[0])sel.value=esquemas[0].id;
+  renderFuentesComisionCierre();
+}
+function renderFuentesComisionCierre(){
+  const pol=IANNA_COM.politicaActual(), esq=(pol.esquemas_pago||[]).find(e=>e.id===$('c-distribucion-comision')?.value), sel=$('c-fuente-comision'); if(!sel)return;
+  const ap=apartadosService.obtener(_cierreData?.ap?.id)||_cierreData?.ap||{}; const canal=IANNA_COM.canalOperacion(ap); const prev=sel.value;
+  sel.innerHTML=(esq?.fuentes||[]).filter(f=>f.activo!==false).map(f=>`<option value="${f.id}">${f.nombre}</option>`).join('');
+  const rec=(esq?.fuentes||[]).find(f=>f.canal===canal)||(esq?.fuentes||[])[0]; sel.value=(prev&&(esq?.fuentes||[]).some(f=>f.id===prev))?prev:(rec?.id||''); onFuenteComisionCierre();
+}
+function onFuenteComisionCierre(){
+  const pol=IANNA_COM.politicaActual(), esq=(pol.esquemas_pago||[]).find(e=>e.id===$('c-distribucion-comision')?.value), f=(esq?.fuentes||[]).find(x=>x.id===$('c-fuente-comision')?.value);
+  const b=$('c-broker-comision-wrap'),r=$('c-recomendador-wrap'); if(b)b.style.display=f?.canal==='broker'?'':'none'; if(r)r.style.display=f?.canal==='recomendacion'?'':'none';
+  if(f?.canal==='broker'&&$('c-broker-comision')) $('c-broker-comision').innerHTML='<option value="">— Selecciona bróker —</option>'+brokersService.listar({activo:true}).map(x=>`<option value="${x.id}">${x.nombre}</option>`).join('');
 }
 

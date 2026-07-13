@@ -974,7 +974,10 @@
         <div class="fg"><label>Descuento ($)</label><input type="text" inputmode="numeric" id="c-descuento" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"></div>
         <div class="fg"><label>Pago adicional ($)</label><input type="text" inputmode="numeric" id="c-pago-adic" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"></div>
         <div class="fg"><label>Forma de pago adicional</label><select id="c-forma-pago"><option>Transferencia electrónica</option><option>Tarjeta</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option><option>Otro</option></select></div>
-        <div class="fg"><label>Esquema de captación + distribución de cobro</label><select id="c-distribucion-comision" onchange="calcCierre()"></select></div>
+        <div class="fg"><label>Esquema de pago</label><select id="c-distribucion-comision" onchange="renderFuentesComisionCierre();calcCierre()"></select></div>
+        <div class="fg"><label>Fuente de captación</label><select id="c-fuente-comision" onchange="onFuenteComisionCierre();calcCierre()"></select></div>
+        <div class="fg" id="c-broker-comision-wrap" style="display:none"><label>Bróker</label><select id="c-broker-comision"></select></div>
+        <div class="fg" id="c-recomendador-wrap" style="display:none"><label>Nombre del recomendador</label><input id="c-recomendador" placeholder="Nombre completo"></div>
         <div class="fg"><label>Plazo desembolso (1-12 meses)</label>
           <select id="c-plazo" onchange="calcCierre()">
             <option value="0">Contado (sin pagos)</option>
@@ -1308,6 +1311,7 @@
 <script src="business/migraciones1971.business.js"></script>
 <script src="business/migraciones1972.business.js"></script>
 <script src="business/migraciones1973.business.js"></script>
+<script src="business/migraciones1974.business.js"></script>
 <script src="modules/operaciones-ui.module.js"></script> <!-- 1.95: UI del Motor de Operaciones -->
 <script src="modules/cobranza.module.js"></script>
 <script src="modules/cierre-acciones.module.js"></script>

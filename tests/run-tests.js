@@ -69,6 +69,7 @@ function cargar(rel) {
   'business/oportunidades.business.js',
   'business/pipeline.business.js',
   'business/cierre-lifecycle.business.js',
+  'business/migraciones1974.business.js',
 ].forEach(cargar);
 
 /* usuario de pruebas (gerente por defecto) */
@@ -376,7 +377,14 @@ t('Control de Operaciones oculta eventos técnicos por default conceptualmente',
   verdad(true, 'vista negocio activa');
 });
 
+
+/* ── 1.97.4 · MATRIZ DE COMISIONES + NÓMINA + COBRANZA V2 ── */
+console.log('▶ Fase 1.97.4 (Commission Matrix, Payroll Foundation & Collections v2)');
+t('esquema de pago soporta fuentes y distribuciones por rol',()=>{ const d=X('IANNA_MIG_1974.defaults()'); verdad(d.length>=3); verdad(d[0].fuentes.length>=6); verdad(d[0].fuentes[0].distribuciones.asesor.length>=1); });
+t('distribución admite máximo cuatro partes por diseño',()=>{ const d=X('IANNA_MIG_1974.defaults()'); verdad(d.every(e=>e.fuentes.every(f=>['asesor','gerente','tercero'].every(r=>(f.distribuciones[r]||[]).length<=4)))); });
+
 console.log('\n═════════════════════════════════════');
 console.log(`RESULTADO: ${ok} pasaron · ${mal} fallaron`);
 if (mal) { console.log('\nFallas:\n - ' + fallas.join('\n - ')); process.exit(1); }
+
 console.log('SUITE EN VERDE ✓');

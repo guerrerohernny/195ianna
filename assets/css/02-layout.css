@@ -41,3 +41,9 @@
 /* ── MAIN ── */
 .main{margin-left:var(--sb);margin-top:var(--tb);padding:24px;min-height:calc(100vh - var(--tb))}
 
+
+/* 1.97.4 — shell estable: cada módulo inicia arriba y usa flujo normal. */
+.main{overflow:visible!important;position:relative}
+.page.active{display:block!important;position:static!important;transform:none!important;margin-top:0!important;padding-top:0!important;min-height:0!important}
+.page>.sechdr:first-child{margin-top:0!important}
+#page-cotizador,#page-whatsapp,#page-perfil,#page-brokers,#page-configuracion,#page-auditoria{padding-top:0!important;transform:none!important}
