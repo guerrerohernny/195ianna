@@ -210,3 +210,7 @@ Estado: entregada. Corrige scroll/layout de módulos, estabiliza el bloqueo de m
 
 ## Fase 1.97.4 — Entregada
 Motor matricial de comisiones, nómina base, cobranza v2 y estabilización de layout.
+
+
+## 1.97.5 — Root Cause Stabilization (2026-07)
+Estabilización de layout, cierre contado, esquemas comerciales, datos maestros y ventas históricas persistentes.

@@ -79,7 +79,7 @@
     </div>
   </div>
 
-  <main class="main">
+  <main class="main" id="main-viewport">
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
       <div class="sechdr">
@@ -154,6 +154,10 @@
       </div>
       <div id="view-lista"><div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Prospecto</th><th>Fuente</th><th>Presupuesto</th><th>Score</th><th>Asesor</th><th>Estatus</th><th>Registro</th><th></th></tr></thead><tbody id="prosp-tbody"></tbody></table></div></div></div>
       <div id="view-kanban" style="display:none"><div class="kanban" id="kanban-board"></div></div>
+      <section id="ventas-historicas-panel" class="card ventas-historicas-panel" style="margin-top:18px">
+        <div class="ventas-historicas-head"><div><div class="sectl" style="font-size:16px">Ventas históricas</div><div class="secst">Registro fijo de ventas concluidas; una nueva oportunidad nunca elimina este historial.</div></div><span class="badge" id="ventas-historicas-count">0</span></div>
+        <div class="tw"><table><thead><tr><th>Venta</th><th>Cliente</th><th>Ubicación</th><th>Modelo</th><th>Fecha</th><th>Valor</th><th></th></tr></thead><tbody id="ventas-historicas-tbody"></tbody></table></div>
+      </section>
     </div>
 
     <!-- INVENTARIO -->
@@ -299,11 +303,10 @@
             <label style="display:block;font-size:12px;margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0"><input type="checkbox" id="pc-desc"> Aplicar descuento a la base (recomendado)</label>
           </div>
           <div>
-            <div style="font-weight:700;font-size:12.5px;margin-bottom:6px">Porcentajes de comisión</div>
-            <div class="fg" style="margin-bottom:6px"><label>Asesor directo (%)</label><input type="number" step="0.001" id="pc-pct-ad" style="width:100%"></div>
-            <div class="fg" style="margin-bottom:6px"><label>Asesor con broker (%)</label><input type="number" step="0.001" id="pc-pct-ab" style="width:100%"></div>
-            <div class="fg" style="margin-bottom:6px"><label>Gerente (%)</label><input type="number" step="0.001" id="pc-pct-ge" style="width:100%"></div>
-            <div class="fg" style="margin-bottom:6px"><label>Broker externo (%)</label><input type="number" step="0.001" id="pc-pct-bk" style="width:100%"></div>
+            <div class="legacy-retired-note">
+              <b>Motor de comisiones vigente</b>
+              <span>Los porcentajes generales fueron retirados. Toda comisión se define exclusivamente dentro de cada Esquema Comercial.</span>
+            </div>
           </div>
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0">
@@ -896,7 +899,7 @@
 
 <!-- LOTE DETALLE (ver) -->
 <!-- GENERAR CIERRE MODAL -->
-<div class="mbd" id="m-cierre"><div class="modal" style="max-width:780px;max-height:90vh;overflow-y:auto">
+<div class="mbd" id="m-cierre"><div class="modal cierre-modal" id="cierre-modal"><div class="cierre-scroll" id="cierre-scroll">
   <div class="mhdr" style="background:var(--navy);color:#fff">
     <div class="m-title" style="color:#fff">📄 Generar Cierre — <span id="cierre-ttl-sub"></span></div>
     <div class="mx" style="color:#fff" onclick="closeM('m-cierre')">✕</div>
@@ -974,7 +977,7 @@
         <div class="fg"><label>Descuento ($)</label><input type="text" inputmode="numeric" id="c-descuento" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"></div>
         <div class="fg"><label>Pago adicional ($)</label><input type="text" inputmode="numeric" id="c-pago-adic" placeholder="0" oninput="formatMoneyInput(this);calcCierre()"></div>
         <div class="fg"><label>Forma de pago adicional</label><select id="c-forma-pago"><option>Transferencia electrónica</option><option>Tarjeta</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option><option>Otro</option></select></div>
-        <div class="fg"><label>Esquema de pago</label><select id="c-distribucion-comision" onchange="renderFuentesComisionCierre();calcCierre()"></select></div>
+        <div class="fg"><label>Esquema comercial</label><select id="c-distribucion-comision" onchange="renderFuentesComisionCierre();calcCierre()"></select></div>
         <div class="fg"><label>Fuente de captación</label><select id="c-fuente-comision" onchange="onFuenteComisionCierre();calcCierre()"></select></div>
         <div class="fg" id="c-broker-comision-wrap" style="display:none"><label>Bróker</label><select id="c-broker-comision"></select></div>
         <div class="fg" id="c-recomendador-wrap" style="display:none"><label>Nombre del recomendador</label><input id="c-recomendador" placeholder="Nombre completo"></div>
@@ -1053,7 +1056,7 @@
       </div>
     </div>
   </div>
-</div></div>
+</div></div></div>
 
 <!-- GENERAR CIERRE MODAL -->
 <!-- FUSIÓN MODAL -->
@@ -1312,6 +1315,7 @@
 <script src="business/migraciones1972.business.js"></script>
 <script src="business/migraciones1973.business.js"></script>
 <script src="business/migraciones1974.business.js"></script>
+<script src="business/migraciones1975.business.js"></script>
 <script src="modules/operaciones-ui.module.js"></script> <!-- 1.95: UI del Motor de Operaciones -->
 <script src="modules/cobranza.module.js"></script>
 <script src="modules/cierre-acciones.module.js"></script>

@@ -210,3 +210,6 @@ Las claves operativas antiguas siguen existiendo únicamente como referencias in
 ## Apéndice 1.97.4
 
 La política de comisión se representa como `esquemas_pago[]`. Cada esquema contiene modalidad y `fuentes[]`; cada fuente congela porcentajes y distribuciones independientes para asesor, gerente y tercero. Las distribuciones aceptan de una a cuatro partes y cada rol con porcentaje mayor a cero debe sumar 100%. `comisiones_nomina` contiene líneas elegibles/en corte/pagadas; `cortes_comision` agrupa y liquida líneas sin mutar el historial. Cobranza usa el ledger para el saldo y reconstruye el efectivo documental por folio para incluir apartado y pago adicional sin duplicarlos.
+
+## Apéndice 1.97.5 — Root Cause Stabilization
+La aplicación usa un único MainViewport desplazable. Persona/Cliente conserva datos maestros y ventas históricas independientes de sus oportunidades activas. El Motor de Comisiones consume exclusivamente esquemas comerciales; las partes de pago se expresan como puntos porcentuales de la venta y suman el porcentaje total del rol.
