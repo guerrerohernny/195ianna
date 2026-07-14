@@ -115,3 +115,10 @@ Estados: `Aceptado` · `Propuesto` · `Reafirmado` (aceptado pero incumplido en 
 ## ADR-019 — Emisión de folios idempotente por referencia (`emitirUnaVez`)
 **Estado:** ✅ Implementado (Fase 1.95).
 **Decisión:** `IANNA_FOLIOS.emitirUnaVez(tipo, ref)` devuelve el folio ya emitido para esa referencia o emite uno nuevo. El congelamiento de pagarés la usa (referencia `<apartadoId>:<n>`): ni un doble congelamiento accidental puede duplicar folios. `emitir()` conserva su semántica de avance (cobranza emite N folios por operación).
+
+## ADR-020 — Hito cumplido no equivale a comisión pagada
+**Estado:** ✅ Implementado (Fase 1.97.6).
+**Contexto:** el botón manual “Cobrar” mezclaba cumplimiento comercial, devengo y pago.
+**Decisión:** separar `Hito → Línea elegible → Corte → Pago`. Firma se cumple automáticamente al confirmar Venta; hitos posteriores requieren Gerente/Administrador. Las Ventas congelan su esquema y beneficiarios.
+**Alternativas rechazadas:** marcar directamente una parte como cobrada; recalcular desde Parámetros vigentes; administrar hitos desde la Persona.
+**Consecuencias:** la comisión se vuelve trazable y permite nómina/cortes reales sin alterar operaciones históricas.

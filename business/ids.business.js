@@ -22,7 +22,7 @@ window.IANNA_IDS = {
     prospecto:'PRO', cliente:'CLI', lote:'LOT', venta:'VEN', apartado:'APT',
     pago:'PAG', recibo:'REC', contrato:'CON', cancelacion:'CAN', comision:'COM',
     auditoria:'AUD', operacion:'OPE', gerente:'GER', asesor:'ASE', broker:'BRK',
-    proyecto:'PRY', empresa:'EMP',
+    proyecto:'PRY', empresa:'EMP', beneficiario:'BEN', corte_comision:'COR',
   },
 
   // Emite el siguiente identificador del tipo. Consecutivo persistente, jamás reutilizado.

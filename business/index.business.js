@@ -18,6 +18,6 @@
    ════════════════════════════════════════════════════════════════ */
 
 window.IANNA_BUSINESS = {
-  registradas: ['motor','folios','operaciones','healthcheck','cancelaciones','estados','ids','ops-engine'],
-  planeadas: ['cambios-lote','cambio-cliente','reasignaciones','penalizaciones','liberacion-inventario','comisiones'],
+  registradas: ['motor','folios','operaciones','healthcheck','cancelaciones','estados','ids','ops-engine','comisiones','comisiones-lifecycle'],
+  planeadas: ['cambios-lote','cambio-cliente','reasignaciones','penalizaciones','liberacion-inventario'],
 };

@@ -32,13 +32,17 @@ window.IANNA_CIERRE = (function(){
     const auth=AUTORIZADOR.autorizar('validar_contrato',{registroId:aid}); if(!auth.ok)return auth;
     const ap=obtener(aid); if(!ap) return {ok:false,error:'Apartado inexistente'};
     if(![ESTADOS.BORRADOR,ESTADOS.CORRECCION].includes(estado(ap))) return {ok:false,error:'Primero genera un borrador'};
+    const politicaSnap=ctx.politica_snapshot||IANNA_COM.snapshotDePolitica(ap);
+    const apComision={...ap,financial_snapshot:ctx.financial_snapshot,datos_cierre:ctx.datos_cierre,politica_snapshot:politicaSnap};
+    const comision=typeof IANNA_COM_CICLO!=='undefined'?IANNA_COM_CICLO.construirSnapshot(apComision):{ok:true,snapshot:null};
+    if(!comision.ok) return comision;
     const pags=emitirPagares(ap,ctx.pagares||[]);
     const rec=emitirReciboAdicional(ap,ctx.pago_adicional,ctx.forma_pago_adicional);
     const ahora=new Date().toISOString();
     apartadosService.actualizar(aid,{
       cierre_estado:ESTADOS.VALIDADO, validado_en:ahora, validado_por:CU.id,
       doc_snapshot:ctx.doc_snapshot, financial_snapshot:ctx.financial_snapshot, datos_cierre:ctx.datos_cierre,
-      politica_snapshot:ctx.politica_snapshot||IANNA_COM.snapshotDePolitica(ap), pagares_congelados:pags,
+      politica_snapshot:politicaSnap, comision_snapshot:comision.snapshot, pagares_congelados:pags,
       recibo_pago_adicional_pendiente:rec, cierre_generado:true
     });
     return {ok:true,estado:ESTADOS.VALIDADO,pagares:pags,recibo:rec};

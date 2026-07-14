@@ -384,32 +384,15 @@ window.IANNA_COM = (function(){
   function comisionGerente(ap){ return comisionBeneficiario(ap,'gerente'); }
   function comisionBroker(ap){ const c=comisionBeneficiario(ap,'broker'); return (c&&c.total>0)?c:{rol:'broker',base:0,porcentaje:0,total:0,partes:[],es_broker:canalOperacion(ap)==='broker'}; }
 
-  // Registra las comisiones devengadas en el ledger financiero (una entrada por parte).
-  // Se llama automáticamente al ejecutar la operación "contrato_firmado".
+  // Fase 1.97.6: el registro de la Venta inicializa el ciclo de comisiones.
+  // Ya NO se devengan todas las partes en el ledger al firmar. Solo el hito
+  // Firma se cumple automáticamente y vuelve elegibles sus líneas. Los demás
+  // hitos se liberan desde la Venta por Gerencia/Administración.
   function devengarComisiones(ap){
-    if(!ap || ap.estatus !== 'Venta') return { asesor:null, gerente:null };
-    const politica_version = (ap.politica_snapshot||{}).version || politicaActual().version;
-    const asesor = comisionAsesor(ap);
-    const gerente = comisionGerente(ap);
-    const broker = comisionBroker(ap);
-    asesor.partes.forEach(p => {
-      IANNA_FIN.registrarMovimiento({
-        tipo:'comision_asesor', operacionId: ap.id, personaId: ap.prospectoId,
-        monto: p.monto, concepto:`Comisión asesor — parte ${p.parte} (${IANNA_FMT.PCT(p.pct)})`,
-        documento: ap.id_venta || ap.id_publico, politica_version,
-        motivo:`Devengo automático al firmar contrato (base ${IANNA_FMT.MXN(asesor.base)})`,
-      });
-    });
-    gerente.partes.forEach(p => {
-      IANNA_FIN.registrarMovimiento({
-        tipo:'comision_gerente', operacionId: ap.id, personaId: ap.prospectoId,
-        monto: p.monto, concepto:`Comisión gerente — parte ${p.parte} (${IANNA_FMT.PCT(p.pct)})`,
-        documento: ap.id_venta || ap.id_publico, politica_version,
-        motivo:`Devengo automático al firmar contrato (base ${IANNA_FMT.MXN(gerente.base)})`,
-      });
-    });
-    (broker.partes||[]).forEach(p=>IANNA_FIN.registrarMovimiento({tipo:'comision_broker',operacionId:ap.id,personaId:ap.prospectoId,monto:p.monto,concepto:`Comisión broker — parte ${p.parte} (${IANNA_FMT.PCT(p.pct)})`,documento:ap.id_venta||ap.id_publico,politica_version,motivo:`Devengo broker según esquema ${broker.esquema_nombre||''}`}));
-    return { asesor, gerente, broker };
+    if(!ap || ap.estatus !== 'Venta') return {ok:false,error:'La operación todavía no es Venta'};
+    if(typeof IANNA_COM_CICLO!=='undefined') return IANNA_COM_CICLO.activarVenta(ap,{usuario:(typeof CU!=='undefined'&&CU)?CU.id:'system'});
+    // Fallback defensivo para paquetes antiguos sin el motor 1.97.6.
+    return {ok:false,error:'Motor de ciclo de comisiones no disponible'};
   }
 
   /* ──────────────────────────────────────────────────────────────
