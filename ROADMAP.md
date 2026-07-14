@@ -214,3 +214,10 @@ Motor matricial de comisiones, nómina base, cobranza v2 y estabilización de la
 
 ## 1.97.5 — Root Cause Stabilization (2026-07)
 Estabilización de layout, cierre contado, esquemas comerciales, datos maestros y ventas históricas persistentes.
+
+## 1.97.5.1 — Visual Restore & Opportunity Pipeline (2026-07)
+
+- Restauración del layout visible previo al viewport fijo de 1.97.5.
+- Lista y Kanban pasan a representar Oportunidades y Operaciones.
+- Una Persona puede conservar una Venta visible y abrir simultáneamente una nueva Oportunidad en Nuevo.
+- Parche acotado: comisiones y cobranza quedan fuera de este corte.

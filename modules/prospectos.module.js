@@ -6,32 +6,83 @@
 // ================================================================
 // PROSPECTOS
 // ================================================================
-function renderProspectos(){ populateSelects(); filterProsp(); renderVentasHistoricas(); }
+function renderProspectos(){ populateSelects(); filterProsp(); }
+
+/* 1.97.5.1 — El pipeline representa OPORTUNIDADES, no Personas.
+   Una misma Persona puede aparecer simultáneamente en Venta (oportunidad cerrada)
+   y en Nuevo/Seguimiento/etc. (otra oportunidad activa). */
+let _pipelineByKey={};
+let _dragItem=null;
+let _dragPrevEst=null;
+
+function _opoEstadoAColumna(estado){
+  const mapa={
+    'Nueva':'Nuevo','Contactada':'Contactado','Cita agendada':'Cita agendada',
+    'Visitó desarrollo':'Visitó desarrollo','Cotización enviada':'Seguimiento',
+    'Negociando':'Seguimiento','En pausa':'Seguimiento'
+  };
+  return mapa[estado]||'Nuevo';
+}
+function _personaPermitida(p){ return !!p && (AUTORIZADOR.puede('ver_global') || p.asesor===CU.id); }
+function _pipelineItems(){
+  const personas=DS.find('prospectos').filter(_personaPermitida);
+  const pmap=Object.fromEntries(personas.map(p=>[p.id,p]));
+  const apartados=DS.find('apartados').filter(a=>pmap[a.prospectoId] && ['Activo','Venta'].includes(a.estatus));
+
+  // Compatibilidad: una Persona sin Oportunidad ni Apartado recibe una oportunidad implícita.
+  personas.forEach(p=>{
+    const tieneOpo=(typeof IANNA_OPO!=='undefined') && IANNA_OPO.dePersona(p.id).length>0;
+    const tieneOperacion=apartados.some(a=>a.prospectoId===p.id);
+    if(!tieneOpo&&!tieneOperacion){ try{ IANNA_OPO.oportunidadImplicita(p.id); }catch(e){} }
+  });
+
+  const items=[];
+  const vinculadas=new Set(apartados.map(a=>a.oportunidadId).filter(Boolean));
+  const oportunidades=(typeof IANNA_OPO!=='undefined'?IANNA_OPO.todas():[])
+    .filter(o=>pmap[o.personaId] && !['Ganada','Perdida','Cancelada'].includes(o.estado));
+
+  oportunidades.forEach(o=>{
+    const p=pmap[o.personaId];
+    const key='opo:'+o.id;
+    items.push({key,tipo:'oportunidad',oportunidadId:o.id,personaId:p.id,persona:p,
+      estatus:_opoEstadoAColumna(o.estado),fuente:o.origen||p.fuente||'',asesor:o.asesor_asignado||p.asesor,
+      presupuesto:Number(o.presupuesto||p.presupuesto||0),fecha:o.fecha_creacion||p.fechaRegistro,
+      id_publico:o.id_publico||'',operacion:null});
+  });
+
+  // Los Apartados y Ventas son oportunidades operacionales inmutables en el pipeline.
+  apartados.forEach(a=>{
+    const p=pmap[a.prospectoId];
+    const venta=a.estatus==='Venta';
+    const key=(venta?'venta:':'apartado:')+a.id;
+    items.push({key,tipo:venta?'venta':'apartado',oportunidadId:a.oportunidadId||null,personaId:p.id,persona:p,
+      estatus:venta?'Venta':'Apartado',fuente:a.fuente||p.fuente||'',asesor:a.asesor||p.asesor,
+      presupuesto:Number(a.valor_operacion||p.presupuesto||0),fecha:a.fecha_venta||a.fecha_apartado||p.fechaRegistro,
+      id_publico:venta?(a.id_venta||a.id_publico||a.id):(a.id_publico||a.id),operacion:a});
+  });
+
+  _pipelineByKey=Object.fromEntries(items.map(x=>[x.key,x]));
+  return items;
+}
 function filterProsp(){
   const q=($('s-prosp')?.value||'').toLowerCase();
   const se=$('f-est')?.value||'';
   const sa=$('f-asesor-p')?.value||'';
   const sf=$('f-fuente')?.value||'';
-  let list=AUTORIZADOR.puede('ver_global')?DS.find('prospectos'):DS.find('prospectos',{asesor:CU.id});
-  // Filtro por estatus
-  if(se==='__todos__'){
-    // mostrar todos sin filtro
-  } else if(se!==''){
-    list=list.filter(p=>p.estatus===se);
-  } else {
-    // Vista default: solo activos
-    list=list.filter(p=>!ESTATUS_INACTIVOS.includes(p.estatus));
-  }
+  let list=_pipelineItems();
+  if(se&&se!=='__todos__') list=list.filter(x=>x.estatus===se);
   if(q){
-    const qNorm=q.replace(/\s+/g,'');
-    list=list.filter(p=>p.nombre.toLowerCase().includes(q)||(p.telefono||'').replace(/\s+/g,'').includes(qNorm)||(p.correo||'').toLowerCase().includes(q));
+    const qn=q.replace(/\s+/g,'');
+    list=list.filter(x=>{
+      const p=x.persona||{};
+      return (p.nombre||'').toLowerCase().includes(q)||(p.telefono||'').replace(/\s+/g,'').includes(qn)||
+        (p.correo||'').toLowerCase().includes(q)||(x.id_publico||'').toLowerCase().includes(q);
+    });
   }
-  if(sa) list=list.filter(p=>p.asesor===sa);
-  if(sf) list=list.filter(p=>p.fuente===sf);
-  list.sort((a,b)=>new Date(b.fechaRegistro)-new Date(a.fechaRegistro));
-  if(PVIEW==='lista') renderListaView(list);
-  else renderKanbanView(list);
-  renderVentasHistoricas();
+  if(sa) list=list.filter(x=>x.asesor===sa);
+  if(sf) list=list.filter(x=>x.fuente===sf);
+  list.sort((a,b)=>new Date(b.fecha||0)-new Date(a.fecha||0));
+  if(PVIEW==='lista') renderListaView(list); else renderKanbanView(list);
 }
 function setView(m){
   PVIEW=m;
@@ -47,111 +98,77 @@ function _historialPersona(pid){
   return {ventas,opos};
 }
 function _badgesHistorial(pid){ const h=_historialPersona(pid); return `${h.ventas.length?`<span class="badge" style="background:#ecfdf5;color:#047857;margin-top:4px">${h.ventas.length} venta${h.ventas.length>1?'s':''}</span>`:''}${h.opos.length?`<span class="badge" style="background:#eff6ff;color:#1d4ed8;margin-top:4px;margin-left:4px">${h.opos.length} oportunidad${h.opos.length>1?'es':''}</span>`:''}`; }
-
-function renderVentasHistoricas(){
-  const tb=$('ventas-historicas-tbody'), cnt=$('ventas-historicas-count'); if(!tb)return;
-  let ventas=DS.find('apartados').filter(a=>a.estatus==='Venta');
-  if(!AUTORIZADOR.puede('ver_global')) ventas=ventas.filter(a=>a.asesor===CU.id);
-  ventas.sort((a,b)=>new Date(b.fecha_venta||b.fecha_apartado||0)-new Date(a.fecha_venta||a.fecha_apartado||0));
-  if(cnt)cnt.textContent=String(ventas.length);
-  tb.innerHTML=ventas.length?ventas.map(v=>{const p=DS.findOne('prospectos',v.prospectoId)||{};return `<tr><td><b>${v.id_venta||v.id_publico||v.id}</b></td><td>${p.nombre||v.cliente_nombre||'—'}<div style="font-size:11px;color:var(--t3)">${p.id_cliente||''}</div></td><td>${v.clave_lote||'—'}</td><td>${v.modelo_nombre||getMod(v.modelo_id)?.nombre||'—'}</td><td>${fD(v.fecha_venta||v.fecha_apartado)}</td><td>${mxn(v.valor_operacion||IANNA_VALOR?.valorTotalVivienda?.(v)||0)}</td><td><button class="btn btn-out btn-xs" onclick="openDetalle('${v.prospectoId}')">Ver cliente</button></td></tr>`}).join(''):`<tr><td colspan="7"><div class="empty"><p>Aún no hay ventas históricas.</p></div></td></tr>`;
+function _itemSubtitulo(x){
+  if(x.tipo==='venta') return `${x.id_publico||'Venta'} · ${x.operacion?.clave_lote||''}`;
+  if(x.tipo==='apartado') return `${x.id_publico||'Apartado'} · ${x.operacion?.clave_lote||''}`;
+  return x.id_publico||'Oportunidad';
 }
 function renderListaView(list){
   const tb=$('prosp-tbody');
-  if(!list.length){ tb.innerHTML=`<tr><td colspan="8"><div class="empty"><div class="empty-i">👥</div><p>Sin prospectos con estos filtros.</p></div></td></tr>`; return; }
-  tb.innerHTML=list.map(p=>{const a=getUser(p.asesor);return `<tr style="cursor:pointer" onclick="openDetalle('${p.id}')">
-    <td><div style="font-weight:600">${p.nombre}</div><div style="font-size:11.5px;color:var(--t3)">${p.telefono}</div><div>${_badgesHistorial(p.id)}</div></td>
-    <td style="color:var(--t2)">${p.fuente||'—'}</td>
-    <td style="font-weight:500">${mxn(p.presupuesto)}</td>
+  if(!list.length){ tb.innerHTML=`<tr><td colspan="8"><div class="empty"><div class="empty-i">👥</div><p>Sin oportunidades con estos filtros.</p></div></td></tr>`; return; }
+  tb.innerHTML=list.map(x=>{const p=x.persona,a=getUser(x.asesor);return `<tr style="cursor:pointer" onclick="openDetalle('${p.id}')">
+    <td><div style="font-weight:600">${p.nombre}</div><div style="font-size:11px;color:var(--t3)">${_itemSubtitulo(x)}</div><div style="font-size:11.5px;color:var(--t3)">${p.telefono||''}</div></td>
+    <td style="color:var(--t2)">${x.fuente||'—'}</td>
+    <td style="font-weight:500">${mxn(x.presupuesto)}</td>
     <td>${scoreBadge(p)}</td>
     <td><div style="display:flex;align-items:center;gap:6px"><div class="av" style="width:24px;height:24px;font-size:10px">${a.nombre.charAt(0)}</div>${a.nombre.split(' ')[0]}</div></td>
-    <td>${sBadge(p.estatus)}</td>
-    <td style="color:var(--t3);font-size:12px">${fDS(p.fechaRegistro)}</td>
+    <td>${sBadge(x.estatus)}</td>
+    <td style="color:var(--t3);font-size:12px">${fDS(x.fecha)}</td>
     <td onclick="event.stopPropagation()"><button class="btn btn-out btn-xs" onclick="openDetalle('${p.id}')">Ver</button></td>
   </tr>`;}).join('');
 }
 function renderKanbanView(list){
   $('kanban-board').innerHTML=ESTATUS_ACTIVOS.map(est=>{
-    const cs=list.filter(p=>p.estatus===est);
+    const cs=list.filter(x=>x.estatus===est);
     return `<div class="k-col" ondragover="kDragOver(event)" ondrop="kDrop(event,'${est}')" data-est="${est}">
       <div class="k-hdr"><div class="k-ttl">${est}</div><div class="k-cnt">${cs.length}</div></div>
-      <div class="k-cards">${cs.length===0?'<div class="k-empty">Arrastra aquí</div>':cs.map(p=>{const a=getUser(p.asesor);return `<div class="k-card" draggable="true" onclick="openDetalle('${p.id}')" ondragstart="kDragStart(event,'${p.id}')" ondragend="kDragEnd(event)" data-pid="${p.id}"><div class="k-nm">${p.nombre}</div><div class="k-ph">${p.telefono}</div><div>${_badgesHistorial(p.id)}</div><div class="k-ft"><div style="font-size:11px;color:var(--t3)">${a.nombre.split(' ')[0]}</div>${scoreBadge(p)}</div></div>`;}).join('')}</div>
+      <div class="k-cards">${cs.length===0?'<div class="k-empty">Arrastra aquí</div>':cs.map(x=>{const p=x.persona,a=getUser(x.asesor),movible=x.tipo==='oportunidad';return `<div class="k-card" ${movible?'draggable="true"':''} onclick="openDetalle('${p.id}')" ${movible?`ondragstart="kDragStart(event,'${x.key}')" ondragend="kDragEnd(event)"`:''} data-key="${x.key}">
+        <div class="k-nm">${p.nombre}</div><div class="k-ph">${_itemSubtitulo(x)}</div><div class="k-ph">${p.telefono||''}</div>
+        <div class="k-ft"><div style="font-size:11px;color:var(--t3)">${a.nombre.split(' ')[0]}</div>${x.tipo==='venta'?'<span class="badge" style="background:#ecfdf5;color:#047857">Histórica</span>':scoreBadge(p)}</div></div>`;}).join('')}</div>
     </div>`;
   }).join('');
 }
 function auditLog(tabla,id,accion,antes,despues){ DS.audit(tabla,id,accion,antes,despues); }
-let _dragPid=null;
-function kDragStart(e,pid){ _dragPid=pid; e.currentTarget.style.opacity='.45'; e.dataTransfer.effectAllowed='move'; }
+function kDragStart(e,key){ _dragItem=_pipelineByKey[key]||null; if(!_dragItem)return; e.currentTarget.style.opacity='.45'; e.dataTransfer.effectAllowed='move'; }
 function kDragEnd(e){ e.currentTarget.style.opacity='1'; document.querySelectorAll('.k-col').forEach(c=>c.classList.remove('k-drag-over')); }
 function kDragOver(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; e.currentTarget.closest('.k-col')?.classList.add('k-drag-over'); }
 function kDrop(e,nuevoEst){
   e.preventDefault();
   document.querySelectorAll('.k-col').forEach(c=>c.classList.remove('k-drag-over','k-drag-over-cita','k-drag-over-apt','k-drag-over-seg'));
-  if(!_dragPid) return;
-  const p=DS.findOne('prospectos',_dragPid);
-  if(!p||p.estatus===nuevoEst){ _dragPid=null; return; }
-  _dragPrevEst=p.estatus; // store previous for cancel
-
+  const x=_dragItem; if(!x||x.tipo!=='oportunidad')return;
+  if(x.estatus===nuevoEst){_dragItem=null;return;}
+  _dragPrevEst=x.estatus;
   if(nuevoEst==='Cita agendada'){
-    // Show cita modal
-    const d=new Date(); d.setDate(d.getDate()+1);
-    $('kc-fecha').value=d.toISOString().split('T')[0];
-    $('kc-hora').value='10:00'; $('kc-nota').value='';
-    openM('m-kanban-cita'); return;
+    const d=new Date();d.setDate(d.getDate()+1);$('kc-fecha').value=d.toISOString().split('T')[0];$('kc-hora').value='10:00';$('kc-nota').value='';openM('m-kanban-cita');return;
   }
   if(nuevoEst==='Apartado'){
-    // Must create apartado — open flow, cancel = revert
-    openApartadoFlow();
-    // Auto-select this prospecto in the apartado modal
-    setTimeout(()=>{ if($('ap-cli')) $('ap-cli').value=_dragPid; fillAsesor(); },100);
-    return;
+    openApartadoFlow();setTimeout(()=>{if($('ap-cli'))$('ap-cli').value=x.personaId;fillAsesor();},100);return;
   }
   if(nuevoEst==='Seguimiento'){
-    const d=new Date(); d.setDate(d.getDate()+3);
-    $('ks-fecha').value=d.toISOString().split('T')[0];
-    $('ks-hora').value='10:00'; $('ks-nota').value='';
-    openM('m-kanban-seg'); return;
+    const d=new Date();d.setDate(d.getDate()+3);$('ks-fecha').value=d.toISOString().split('T')[0];$('ks-hora').value='10:00';$('ks-nota').value='';openM('m-kanban-seg');return;
   }
-  if(nuevoEst==='Venta'){
-    // 1.95: una venta jamás se fabrica arrastrando — lo impide la Máquina de Estados
-    const r=IANNA_PIPELINE.solicitarEstatus(_dragPid,'Venta','Kanban');
-    toast(r.error||'Movimiento no permitido','err');
-    _dragPid=null; filterProsp(); return;
-  }
-  // Default: solicitar el cambio al Pipeline (flujo único kanban ≡ ficha)
-  doKanbanMove(_dragPid, nuevoEst, p.estatus);
+  if(nuevoEst==='Venta'){toast('La Venta solo nace de confirmar el contrato firmado.','err');_dragItem=null;filterProsp();return;}
+  doKanbanMove(x,nuevoEst);
 }
-let _dragPrevEst=null;
-function cancelKanbanAction(){
-  // Revert the kanban drag — no state change
-  _dragPid=null; _dragPrevEst=null;
-  $$('.mbd.open').forEach(m=>m.classList.remove('open'));
-  filterProsp();
-}
+function cancelKanbanAction(){ _dragItem=null;_dragPrevEst=null;$$('.mbd.open').forEach(m=>m.classList.remove('open'));filterProsp(); }
 function confirmKanbanCita(){
-  const fecha=$('kc-fecha').value; if(!fecha){toast('Selecciona una fecha','err');return;}
-  const pid=_dragPid; const prev=_dragPrevEst;
-  if(!pid) return;
-  doKanbanMove(pid,'Cita agendada',prev);
-  recordatoriosService.crear({prospectoId:pid,tipo:'Cita agendada',fecha,hora:$('kc-hora').value,nota:$('kc-nota').value.trim()||'Cita en desarrollo',estado:'pendiente',usuario:CU.id});
-  closeM('m-kanban-cita'); _dragPid=null; _dragPrevEst=null;
-  toast('Cita agendada y recordatorio creado ✓','ok');
+  const fecha=$('kc-fecha').value,x=_dragItem;if(!fecha){toast('Selecciona una fecha','err');return;}if(!x)return;
+  doKanbanMove(x,'Cita agendada');recordatoriosService.crear({prospectoId:x.personaId,tipo:'Cita agendada',fecha,hora:$('kc-hora').value,nota:$('kc-nota').value.trim()||'Cita en desarrollo',estado:'pendiente',usuario:CU.id});
+  closeM('m-kanban-cita');_dragItem=null;_dragPrevEst=null;toast('Cita agendada y recordatorio creado ✓','ok');
 }
 function confirmKanbanSeg(){
-  const fecha=$('ks-fecha').value; if(!fecha){toast('Selecciona una fecha','err');return;}
-  const pid=_dragPid; const prev=_dragPrevEst;
-  if(!pid) return;
-  doKanbanMove(pid,'Seguimiento',prev);
-  recordatoriosService.crear({prospectoId:pid,tipo:'Seguimiento WhatsApp',fecha,hora:$('ks-hora').value,nota:$('ks-nota').value.trim()||'Seguimiento por WhatsApp',estado:'pendiente',usuario:CU.id});
-  closeM('m-kanban-seg'); _dragPid=null; _dragPrevEst=null;
-  toast('Movido a Seguimiento — recordatorio creado ✓','ok');
+  const fecha=$('ks-fecha').value,x=_dragItem;if(!fecha){toast('Selecciona una fecha','err');return;}if(!x)return;
+  doKanbanMove(x,'Seguimiento');recordatoriosService.crear({prospectoId:x.personaId,tipo:'Seguimiento WhatsApp',fecha,hora:$('ks-hora').value,nota:$('ks-nota').value.trim()||'Seguimiento por WhatsApp',estado:'pendiente',usuario:CU.id});
+  closeM('m-kanban-seg');_dragItem=null;_dragPrevEst=null;toast('Movido a Seguimiento — recordatorio creado ✓','ok');
 }
-function doKanbanMove(pid, nuevoEst, anterior){
-  // 1.95 (Etapa 2): el módulo SOLICITA; el Pipeline es la única ruta de cambio de estatus.
-  const r=IANNA_PIPELINE.solicitarEstatus(pid, nuevoEst, 'Kanban');
-  if(!r.ok) toast(r.error,'err');
-  else if(r.advertencia) toast(r.advertencia,'warn');
-  filterProsp(); updateBell();
+function doKanbanMove(x,nuevoEst){
+  const estadoOpo=IANNA_OPO.MAPA_COMPAT[nuevoEst]||nuevoEst;
+  const r=IANNA_OPO.transicionar(x.oportunidadId,estadoOpo,`Kanban: ${x.estatus} → ${nuevoEst}`);
+  if(!r.ok){toast(r.error,'err');return;}
+  // Campo legacy de Persona: solo refleja la oportunidad activa más reciente; no gobierna Ventas históricas.
+  try{ prospectosService.actualizar(x.personaId,{estatus:nuevoEst}); }catch(e){}
+  try{ seguimientosService.crear({prospectoId:x.personaId,tipo:'Nota interna',nota:`Oportunidad ${x.id_publico}: ${x.estatus} → ${nuevoEst}`,fecha:new Date().toISOString(),usuario:CU.id,estatusCambio:nuevoEst}); }catch(e){}
+  _dragItem=null;filterProsp();updateBell();
 }
 function openProspectoModal(editId=null){
   populateSelects();

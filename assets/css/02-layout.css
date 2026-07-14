@@ -43,14 +43,17 @@
 
 
 
-/* 1.97.5 — Root Cause Stabilization: un solo viewport desplazable. */
-html,body{height:100%;overflow:hidden}
-#app{height:100vh;min-height:0;overflow:hidden}
-.main{position:fixed;left:var(--sb);right:0;top:var(--tb);bottom:0;margin:0!important;padding:24px;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;scroll-behavior:auto;overscroll-behavior:contain}
-.page{display:none;position:static!important;transform:none!important;margin:0!important;padding:0!important;min-height:0!important}
+/* 1.97.5.1 — restauración visual: flujo normal del documento.
+   El intento de fijar .main como viewport único ocultó/desplazó módulos largos.
+   La página vuelve a usar el scroll del documento; solo los modales conservan
+   su scroll interno controlado. */
+html,body{min-height:100%;overflow-x:hidden;overflow-y:auto}
+#app{min-height:100vh;overflow:visible}
+.main{margin-left:var(--sb);margin-top:var(--tb);padding:24px;min-height:calc(100vh - var(--tb));overflow:visible!important;position:relative!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important}
+.page{display:none;position:static!important;transform:none!important;margin:0!important;padding-top:0!important;min-height:0!important}
 .page.active{display:block!important}
 .page>.sechdr:first-child{margin-top:0!important}
-#page-cotizador,#page-whatsapp,#page-perfil,#page-brokers,#page-configuracion,#page-auditoria{padding:0!important;transform:none!important;min-height:0!important}
+#page-cotizador,#page-whatsapp,#page-perfil,#page-brokers,#page-configuracion,#page-auditoria{padding-top:0!important;transform:none!important;min-height:0!important}
 .cierre-modal{max-width:780px!important;max-height:90vh!important;overflow:hidden!important;display:flex!important;flex-direction:column!important}
 .cierre-scroll{overflow-y:auto;overflow-x:hidden;min-height:0;flex:1;overscroll-behavior:contain}
 .cierre-sticky-actions{position:sticky;bottom:0;z-index:12;background:#fff;border-top:1px solid var(--bd);padding:12px 0;margin-bottom:-20px;box-shadow:0 -8px 18px rgba(15,23,42,.06)}

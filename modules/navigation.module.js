@@ -12,9 +12,13 @@ function navTo(page,el){
   $('tb-t').textContent=T[page]||page;
   const R={dashboard:renderDashboard,prospectos:renderProspectos,inventario:renderInventario,apartados:renderApartados,ingresos:renderIngresos,reportes:renderReportes,parametros:renderParametros,perfil:renderPerfil,configuracion:renderConfiguracion,brokers:renderBrokers,auditoria:renderAuditoria,'control-operaciones':renderControlOperaciones,cotizador:renderCotizador,whatsapp:renderWhatsApp};
   if(R[page]) R[page]();
-  // 1.97.5: MainViewport es la única superficie desplazable. Restaurar DESPUÉS del render.
-  const viewport=document.getElementById('main-viewport')||document.querySelector('.main');
-  const reset=()=>{ if(viewport){viewport.scrollTop=0;viewport.scrollLeft=0;} if(pg){pg.scrollTop=0;pg.scrollLeft=0;} };
+  // 1.97.5.1: el documento vuelve a ser la superficie principal de scroll.
+  // Reiniciar después del render sin alterar la navegación lateral.
+  const reset=()=>{
+    try{ window.scrollTo({top:0,left:0,behavior:'auto'}); }catch(e){ window.scrollTo(0,0); }
+    try{ document.documentElement.scrollTop=0; document.body.scrollTop=0; }catch(e){}
+    try{ if(pg){pg.scrollTop=0;pg.scrollLeft=0;} }catch(e){}
+  };
   reset(); requestAnimationFrame(reset); setTimeout(reset,0);
   if(window.innerWidth<768) $('sidebar').classList.remove('open');
 }
