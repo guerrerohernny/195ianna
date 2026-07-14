@@ -1,4 +1,4 @@
-<!-- BUILD: 1.97.5.2-html-structure-fix -->
+<!-- BUILD: 1.97.6-commission-lifecycle-payroll -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -973,8 +973,9 @@
         <div class="fg"><label>Forma de pago adicional</label><select id="c-forma-pago"><option>Transferencia electrónica</option><option>Tarjeta</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option><option>Otro</option></select></div>
         <div class="fg"><label>Esquema comercial</label><select id="c-distribucion-comision" onchange="renderFuentesComisionCierre();calcCierre()"></select></div>
         <div class="fg"><label>Fuente de captación</label><select id="c-fuente-comision" onchange="onFuenteComisionCierre();calcCierre()"></select></div>
-        <div class="fg" id="c-broker-comision-wrap" style="display:none"><label>Bróker</label><select id="c-broker-comision"></select></div>
-        <div class="fg" id="c-recomendador-wrap" style="display:none"><label>Nombre del recomendador</label><input id="c-recomendador" placeholder="Nombre completo"></div>
+        <div class="fg" id="c-broker-comision-wrap" style="display:none"><label>Bróker</label><select id="c-broker-comision" onchange="calcCierre()"></select></div>
+        <div class="fg" id="c-recomendador-wrap" style="display:none"><label>Nombre del recomendador</label><input id="c-recomendador" placeholder="Nombre completo" oninput="calcCierre()"></div>
+        <div class="fg c2"><label>Resumen de comisión aplicable</label><div id="cierre-comision-resumen" class="card" style="padding:12px;background:#fff"></div></div>
         <div class="fg"><label>Plazo desembolso (1-12 meses)</label>
           <select id="c-plazo" onchange="calcCierre()">
             <option value="0">Contado (sin pagos)</option>
@@ -1299,6 +1300,7 @@
 <script src="business/financiero.business.js"></script>
 <script src="business/operacion-financiera.business.js"></script>
 <script src="business/comisiones.business.js"></script>
+  <script src="business/comisiones-lifecycle.business.js"></script>
 <script src="business/oportunidades.business.js"></script>
 <script src="business/healthcheck.business.js"></script>
 <script src="business/pipeline.business.js"></script>
@@ -1310,6 +1312,7 @@
 <script src="business/migraciones1973.business.js"></script>
 <script src="business/migraciones1974.business.js"></script>
 <script src="business/migraciones1975.business.js"></script>
+  <script src="business/migraciones1976.business.js"></script>
 <script src="modules/operaciones-ui.module.js"></script> <!-- 1.95: UI del Motor de Operaciones -->
 <script src="modules/cobranza.module.js"></script>
 <script src="modules/cierre-acciones.module.js"></script>

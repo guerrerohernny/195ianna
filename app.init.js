@@ -38,3 +38,4 @@ try{ if(typeof IANNA_MIG_1973!=='undefined') IANNA_MIG_1973.run(); }catch(e){ co
 try{ if(typeof IANNA_MIG_1974!=='undefined') IANNA_MIG_1974.run(); }catch(e){ console.error('[1.97.4] migración',e); }
 
 try{ if(typeof IANNA_MIG_1975!=='undefined') IANNA_MIG_1975.run(); }catch(e){ console.error('[1.97.5] migración',e); }
+try{ if(typeof IANNA_MIG_1976!=='undefined') IANNA_MIG_1976.run(); }catch(e){ console.error('[1.97.6] migración',e); }

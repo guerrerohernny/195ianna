@@ -305,3 +305,22 @@ Cualquier cálculo importante del sistema debe responder estas seis preguntas. S
 6. **¿Qué documentos generó?** — Folios de recibos, cartas, cancelaciones, movimientos.
 
 Este documento se actualiza cuando cambia el modelo, siempre antes que el código.
+
+---
+
+## Extensión 1.97.6 — Ciclo de comisiones
+
+### CommissionSnapshot
+Snapshot inmutable asociado a una Venta. Conserva esquema, fuente, versión de política, base comisionable, beneficiarios, hitos y distribución por rol.
+
+### CommissionMilestone
+Condición de la Venta que habilita una parte de comisión. Estados: `PENDIENTE`, `CUMPLIDO`, `REVOCADO`. Firma puede ser automática; los demás hitos requieren Gerente/Administrador.
+
+### CommissionLine
+Unidad mínima de obligación con un beneficiario. Contiene Venta, rol, beneficiario, hito, porcentaje sobre la venta, base, monto y estado: `pendiente_hito`, `elegible`, `en_corte`, `pagada`, `cancelada` o `ajustada`.
+
+### CommissionCut
+Corte administrativo identificado con `COR-`. Agrupa líneas elegibles y conserva periodo, total, creador, estado, método, referencia y fecha de pago.
+
+### ExternalBeneficiary
+Beneficiario no usuario, como recomendador. Se identifica con `BEN-` para permitir historial y agrupación en cortes sin depender de texto libre.

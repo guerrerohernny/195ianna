@@ -213,3 +213,31 @@ La política de comisión se representa como `esquemas_pago[]`. Cada esquema con
 
 ## Apéndice 1.97.5 — Root Cause Stabilization
 La aplicación usa un único MainViewport desplazable. Persona/Cliente conserva datos maestros y ventas históricas independientes de sus oportunidades activas. El Motor de Comisiones consume exclusivamente esquemas comerciales; las partes de pago se expresan como puntos porcentuales de la venta y suman el porcentaje total del rol.
+
+---
+
+# Apéndice 1.97.6 — Commission Lifecycle & Payroll
+
+## Separación de responsabilidades
+
+La comisión deja de ser un importe con botón manual y se descompone en cuatro entidades lógicas:
+
+1. **Snapshot de comisión de la Venta:** política, esquema, fuente, beneficiarios, base, porcentajes e hitos congelados.
+2. **Hito de devengo:** condición comercial cumplida, por ejemplo Firma, Autorización o Escritura.
+3. **Línea de comisión:** importe de un beneficiario para un hito concreto.
+4. **Corte de comisiones:** agrupador administrativo que autoriza y registra el pago de líneas elegibles.
+
+Flujo canónico:
+
+`Venta → Hito cumplido → Línea elegible → Corte COR- → Pago`
+
+Cumplir un hito nunca equivale a pagar. El primer hito vinculado a `CONTRATO_FIRMADO` se cumple automáticamente al confirmar la Venta. Los hitos manuales requieren autorización central y auditoría.
+
+## Invariantes
+
+- La Venta histórica nunca consulta porcentajes vigentes: consume su `comision_snapshot`.
+- Cada línea es única por `Venta × rol × beneficiario × hito/parte`.
+- Una línea pagada no se elimina ni vuelve a estado anterior; cualquier corrección futura deberá ser compensatoria.
+- Un corte pagado no puede cancelarse directamente.
+- Bróker y recomendador son beneficiarios identificables y agrupables en cortes.
+- La UI solicita acciones; `IANNA_COM_CICLO` gobierna hitos, elegibilidad, cortes y pago.

@@ -221,3 +221,16 @@ Estabilización de layout, cierre contado, esquemas comerciales, datos maestros 
 - Lista y Kanban pasan a representar Oportunidades y Operaciones.
 - Una Persona puede conservar una Venta visible y abrir simultáneamente una nueva Oportunidad en Nuevo.
 - Parche acotado: comisiones y cobranza quedan fuera de este corte.
+
+## 1.97.6 — Commission Lifecycle & Payroll (2026-07)
+
+**Estado:** implementada; pendiente validación E2E autenticada en staging.
+
+- La Venta congela su esquema, fuente, beneficiarios, base comisionable e hitos.
+- `Firma de contrato` se cumple automáticamente al confirmar la Venta.
+- Los hitos posteriores se cumplen o reabren únicamente por Gerente/Administrador.
+- Cumplir un hito vuelve sus líneas **Elegibles**; no las marca como pagadas.
+- Las líneas siguen el ciclo `Pendiente de hito → Elegible → En corte → Pagada`.
+- Se incorporan cortes de comisión `COR-`, agrupación por beneficiario y pago trazable.
+- Brókers y recomendadores quedan identificados como beneficiarios, no como texto aislado.
+- La migración 1.97.6 prepara ventas existentes de forma idempotente y libera solo Firma.
