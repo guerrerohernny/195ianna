@@ -292,6 +292,14 @@ function validarFinanciamientoCierre(){
     if(publico<=0) return {ok:false,error:`Captura el monto aportado por ${inst.componente_publico||'el componente público'}`};
     if(publico>credito) return {ok:false,error:'El monto del componente público no puede ser mayor al crédito total'};
   }
+  const pol=IANNA_COM.politicaActual();
+  const esquemaId=$('c-distribucion-comision')?.value||'', fuenteId=$('c-fuente-comision')?.value||'';
+  const esquema=(pol.esquemas_pago||[]).find(e=>e.id===esquemaId&&e.activo!==false);
+  if(!esquema) return {ok:false,error:'Selecciona un esquema comercial vigente'};
+  const fuente=(esquema.fuentes||[]).find(f=>f.id===fuenteId&&f.activo!==false);
+  if(!fuente) return {ok:false,error:'Selecciona una fuente de captación válida'};
+  if(fuente.canal==='broker'&&!($('c-broker-comision')?.value||'')) return {ok:false,error:'Selecciona el bróker relacionado con esta operación'};
+  if(fuente.canal==='recomendacion'&&!String($('c-recomendador')?.value||'').trim()) return {ok:false,error:'Captura el nombre del recomendador'};
   return {ok:true};
 }
 
@@ -365,6 +373,7 @@ function calcCierre(opts){ opts=opts||{};
   _cierreData.plazo = plazo;
   const apCalc={...ap,datos_cierre:{...(ap.datos_cierre||{}),fin_descuento:String(descuento),tipoCredito:inst.tipo,esquema_comision_id:(($('c-distribucion-comision')?.value||'')+'::'+($('c-fuente-comision')?.value||'')), esquema_pago_id:$('c-distribucion-comision')?.value||'', fuente_comision_id:$('c-fuente-comision')?.value||'', broker_comision_id:$('c-broker-comision')?.value||'', recomendador_nombre:$('c-recomendador')?.value||''},financial_snapshot:{...(ap.financial_snapshot||{}),tipo_financiamiento:inst.tipo,esquema_comision_id:(($('c-distribucion-comision')?.value||'')+'::'+($('c-fuente-comision')?.value||'')), esquema_pago_id:$('c-distribucion-comision')?.value||'', fuente_comision_id:$('c-fuente-comision')?.value||'', broker_comision_id:$('c-broker-comision')?.value||'', recomendador_nombre:$('c-recomendador')?.value||''}};
   const comCalc=IANNA_COM.comisionAsesor(apCalc);
+  renderResumenComisionCierre(apCalc);
   _cierreData.financialSnapshot=IANNA_VALOR.snapshot(ap,{
     gastos:gastosCalc, apartado, descuento, pago_adicional:pagoAdic, forma_pago_adicional:$('c-forma-pago')?.value||'',
     institucion_id:inst.id, institucion_nombre:inst.nombre, tipo_financiamiento:inst.tipo,
@@ -485,6 +494,22 @@ function recolectarDatosCierreForm(){
 
 
 
+
+
+function renderResumenComisionCierre(apCalc){
+  const el=$('cierre-comision-resumen'); if(!el)return;
+  try{
+    const esquema=IANNA_COM.resolverEsquema(apCalc,IANNA_COM.politicaActual());
+    if(!esquema){el.innerHTML='<div style="color:var(--t3)">Selecciona esquema y fuente para ver la comisión.</div>';return;}
+    const roles=[['asesor','Asesor'],['gerente','Gerente'],['tercero',esquema.tercero_tipo||'Tercero']];
+    const rows=roles.map(([rol,nombre])=>{
+      const c=IANNA_COM.comisionBeneficiario(apCalc,rol); if(!c||Number(c.porcentaje||0)<=0)return '';
+      const partes=(c.partes||[]).map(p=>`<span class="badge" style="background:#f8fafc;color:#334155;border:1px solid #e2e8f0">${p.nombre}: ${IANNA_FMT.PCT(p.pct_venta!=null?p.pct_venta:(c.porcentaje*Number(p.pct||0)))}</span>`).join(' ');
+      return `<div style="padding:8px 0;border-top:1px solid var(--bd2)"><div style="display:flex;justify-content:space-between;gap:10px"><b>${nombre}</b><span>${IANNA_FMT.PCT(c.porcentaje)} · ${IANNA_FMT.MXN(c.total)}</span></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">${partes}</div></div>`;
+    }).join('');
+    el.innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><b>${esquema.nombre}</b><div style="font-size:11px;color:var(--t3)">${esquema.fuente||''}</div></div><span class="badge" style="background:#eef6e9;color:#1e3d0f">Base ${IANNA_FMT.MXN(IANNA_COM.baseComisionable(apCalc).base)}</span></div>${rows}`;
+  }catch(e){console.error('resumen comisión cierre',e);el.innerHTML='<div style="color:#b91c1c">No fue posible calcular el resumen de comisión.</div>';}
+}
 
 function renderDistribucionesCierre(){
   const sel=$('c-distribucion-comision'); if(!sel)return;

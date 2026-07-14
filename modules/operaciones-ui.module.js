@@ -44,6 +44,7 @@ function abrirOperaciones(aid){
   const cat=IANNA_OPS.catalogoPara(ap);
   window._opsApId=aid;
   $('ops-titulo').textContent=`${p?.nombre||'Cliente'} — ${l?.clave_fisica||IANNA_FMT.UBICACION(l?.mz,l?.lote)}`;
+  const comisionesHtml=ap.estatus==='Venta'?renderComisionesVentaOps(ap):'';
   $('ops-body').innerHTML=`
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:11.5px">
       <span class="badge" style="background:#1E3D0F;color:#fff">Estado: ${cat.estado}</span>
@@ -59,6 +60,7 @@ function abrirOperaciones(aid){
     ${cat.prohibidas.length?`<div style="font-weight:700;font-size:12.5px;margin-bottom:6px;color:var(--t3)">No disponibles en "${cat.estado}"</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${cat.prohibidas.map(o=>`<span class="badge" style="background:#f8fafc;color:#94a3b8;border:1px dashed #e2e8f0">${o.nombre}</span>`).join('')}</div>`:''}
     ${cat.documentos.length?`<div style="font-size:11px;color:var(--t3)">📎 Documentos de esta etapa: ${cat.documentos.join(' · ')}</div>`:''}
+    ${comisionesHtml}
     <div style="font-size:11px;color:var(--t3);margin-top:10px">🕓 Historial: ${IANNA_HISTORIAL.de(aid).length} operación(es) registradas sobre este expediente.</div>`;
   window._opsCat=cat;
   openM('m-operaciones');
@@ -84,4 +86,42 @@ function openCancelarVenta(aid){
   if(!motivo.trim()){ toast('El motivo es requerido','err'); return; }
   const destino=confirm(`¿Volver el lote ${ap.clave_lote} a:\n\n✅ Aceptar → Disponible\n❌ Cancelar → Apartado`)?'Disponible':'Apartado';
   cancelarVenta(aid, motivo.trim(), destino); // solicitante puro → IANNA_OPS.ejecutar('cancelacion_venta',…)
+}
+
+
+/* ── Fase 1.97.6 · Hitos de comisión dentro de la Venta ───────── */
+function _estadoLineaComisionBadge(estado){
+  const m={pendiente_hito:['Pendiente de hito','#f8fafc','#64748b'],elegible:['Elegible','#ecfdf5','#047857'],en_corte:['En corte','#fff7ed','#c2410c'],pagada:['Pagada','#eff6ff','#1d4ed8'],cancelada:['Cancelada','#fef2f2','#b91c1c']};
+  const x=m[estado]||[estado,'#f8fafc','#475569']; return `<span class="badge" style="background:${x[1]};color:${x[2]}">${x[0]}</span>`;
+}
+function renderComisionesVentaOps(ap){
+  try{
+    const r=IANNA_COM_CICLO.resumen(ap.id); if(!r.ok)return `<div class="card" style="margin-top:14px;padding:12px;color:#b91c1c">${r.error||'Sin información de comisión'}</div>`;
+    const puede=AUTORIZADOR.puede('marcar_hito_comision');
+    const hitos=(r.snapshot.hitos||[]).map(h=>{
+      const lineas=r.lineas.filter(l=>l.hito_id===h.id), monto=lineas.reduce((s,l)=>s+Number(l.monto||0),0);
+      const bloqueada=lineas.some(l=>['en_corte','pagada'].includes(l.estado));
+      const accion=h.estado==='CUMPLIDO'
+        ? (puede&&!bloqueada?`<button class="btn btn-out btn-xs" onclick="revocarHitoComisionDesdeUI('${ap.id}','${h.id}')">Reabrir</button>`:'')
+        : (puede?`<button class="btn btn-gold btn-xs" onclick="marcarHitoComisionDesdeUI('${ap.id}','${h.id}')">Marcar cumplida</button>`:'');
+      return `<div style="display:grid;grid-template-columns:28px 1fr auto;gap:9px;align-items:start;padding:10px 0;border-top:1px solid var(--bd2)">
+        <div style="width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${h.estado==='CUMPLIDO'?'#dcfce7':'#f1f5f9'};color:${h.estado==='CUMPLIDO'?'#166534':'#64748b'}">${h.estado==='CUMPLIDO'?'✓':h.orden}</div>
+        <div><div style="font-weight:700;font-size:12.5px">${h.nombre}</div><div style="font-size:10.5px;color:var(--t3)">${h.estado==='CUMPLIDO'?'Cumplida '+fD(h.cumplido_en||''):'Pendiente'} · ${IANNA_FMT.MXN(monto)}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${lineas.map(l=>`${_estadoLineaComisionBadge(l.estado)}<span style="font-size:10.5px">${l.rol}: ${IANNA_FMT.MXN(l.monto)}</span>`).join('')}</div></div>
+        <div>${accion}</div>
+      </div>`;
+    }).join('');
+    return `<div class="card" style="margin-top:14px;padding:12px;border-left:4px solid var(--gold)">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><b>Comisiones de la Venta</b><div style="font-size:10.5px;color:var(--t3)">${r.snapshot.esquema_nombre} · ${r.snapshot.fuente_nombre||r.snapshot.canal}</div></div><button class="btn btn-out btn-xs" onclick="closeM('m-operaciones');setTimeout(()=>navTo('ingresos'),80)">Ver cortes</button></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px"><div class="kpi"><small>Elegible</small><b>${IANNA_FMT.MXN(r.totales.elegible)}</b></div><div class="kpi"><small>En corte</small><b>${IANNA_FMT.MXN(r.totales.en_corte)}</b></div><div class="kpi"><small>Pagado</small><b>${IANNA_FMT.MXN(r.totales.pagado)}</b></div></div>${hitos}</div>`;
+  }catch(e){console.error('render comisión venta',e);return '<div class="card" style="margin-top:14px;padding:12px;color:#b91c1c">No fue posible cargar las comisiones.</div>';}
+}
+function marcarHitoComisionDesdeUI(aid,hitoId){
+  const fecha=prompt('Fecha de cumplimiento (AAAA-MM-DD):',new Date().toISOString().slice(0,10)); if(fecha===null)return;
+  const nota=prompt('Comentario o referencia (opcional):','')||'';
+  const r=IANNA_COM_CICLO.cumplirHito(aid,hitoId,{fecha:fecha?fecha+'T12:00:00':new Date().toISOString(),nota});
+  if(!r.ok){toast(r.error||r.justificacion,'err');return;} toast(`Hito cumplido. ${r.lineas_elegibles||0} comisión(es) elegible(s).`,'ok'); abrirOperaciones(aid); try{renderIngresos();}catch(e){}
+}
+function revocarHitoComisionDesdeUI(aid,hitoId){
+  const motivo=prompt('Motivo para reabrir el hito:',''); if(motivo===null)return;
+  const r=IANNA_COM_CICLO.revocarHito(aid,hitoId,motivo); if(!r.ok){toast(r.error||r.justificacion,'err');return;} toast('Hito reabierto y comisiones regresadas a pendiente.','warn'); abrirOperaciones(aid); try{renderIngresos();}catch(e){}
 }

@@ -66,10 +66,12 @@ function cargar(rel) {
   'business/financiero.business.js',
   'business/operacion-financiera.business.js',
   'business/comisiones.business.js',
+  'business/comisiones-lifecycle.business.js',
   'business/oportunidades.business.js',
   'business/pipeline.business.js',
   'business/cierre-lifecycle.business.js',
   'business/migraciones1974.business.js',
+  'business/migraciones1976.business.js',
 ].forEach(cargar);
 
 /* usuario de pruebas (gerente por defecto) */
@@ -382,6 +384,33 @@ t('Control de Operaciones oculta eventos técnicos por default conceptualmente',
 console.log('▶ Fase 1.97.4 (Commission Matrix, Payroll Foundation & Collections v2)');
 t('esquema de pago soporta fuentes y distribuciones por rol',()=>{ const d=X('IANNA_MIG_1974.defaults()'); verdad(d.length>=3); verdad(d[0].fuentes.length>=6); verdad(d[0].fuentes[0].distribuciones.asesor.length>=1); });
 t('distribución admite máximo cuatro partes por diseño',()=>{ const d=X('IANNA_MIG_1974.defaults()'); verdad(d.every(e=>e.fuentes.every(f=>['asesor','gerente','tercero'].every(r=>(f.distribuciones[r]||[]).length<=4)))); });
+
+
+/* ── 1.97.6 · CICLO DE COMISIONES Y CORTES ── */
+console.log('▶ Fase 1.97.6 (Commission Lifecycle & Payroll)');
+X("var _p1976=prospectosService.crear({nombre:'Cliente Comisión 1976',telefono:'667 000 1976',estatus:'Venta',asesor:'u_test'});");
+X("var _pol1976=IANNA_COM.politicaDefault(); _pol1976.esquemas_pago=IANNA_MIG_1974.defaults();");
+X("var _a1976=apartadosService.crear({prospectoId:_p1976.id,asesor:'u_test',estatus:'Venta',id_venta:'VEN-197600',id_publico:'APT-197600',modelo_id:'BERDUN',clave_lote:'LOT-X',politica_snapshot:_pol1976,financial_snapshot:{tipo_financiamiento:'especial',esquema_comision_id:'ESQ-ESPECIAL-1::personal',esquema_pago_id:'ESQ-ESPECIAL-1',fuente_comision_id:'personal',base_comisionable_snapshot:{precio_vivienda:4000000,excedente_terreno:0,construccion_adicional:0,plusvalia:0},total_gastos_operacion:0},datos_cierre:{tipoCredito:'especial'}});");
+t('activar Venta crea snapshot, tres hitos y solo Firma elegible',()=>{
+  const r=X("IANNA_COM_CICLO.activarVenta(_a1976,{usuario:'u_test'})"); verdad(r.ok);
+  eq(r.snapshot.hitos.length,3);
+  verdad(r.snapshot.hitos.some(h=>h.evento==='contrato_firmado'&&h.estado==='CUMPLIDO'),'firma no cumplida');
+  verdad(r.lineas.some(l=>l.estado==='elegible'),'sin líneas elegibles');
+  verdad(r.lineas.some(l=>l.estado==='pendiente_hito'),'sin líneas pendientes');
+});
+t('cumplir hito manual libera solo sus líneas y no duplica registros',()=>{
+  const r=X(`(()=>{const antes=comisionesNominaService.lineas({operacion_id:_a1976.id}).length;const h=IANNA_COM_CICLO.resumen(_a1976.id).snapshot.hitos.find(x=>x.evento!=='contrato_firmado'&&x.evento!=='escrituracion');const uno=IANNA_COM_CICLO.cumplirHito(_a1976.id,h.id,{nota:'condición cumplida'});const dos=IANNA_COM_CICLO.cumplirHito(_a1976.id,h.id,{});return {antes,despues:comisionesNominaService.lineas({operacion_id:_a1976.id}).length,hid:h.id,uno,dos,lineas:comisionesNominaService.lineas({operacion_id:_a1976.id}).filter(x=>x.hito_id===h.id)}})()`);
+  verdad(r.uno.ok); eq(r.despues,r.antes); verdad(r.dos.yaCumplido===true); verdad(r.lineas.every(x=>x.estado==='elegible'));
+});
+t('corte mueve elegibles a en_corte y pago las marca pagadas',()=>{
+  const r=X(`(()=>{const ids=comisionesNominaService.lineas({operacion_id:_a1976.id}).filter(x=>x.estado==='elegible').map(x=>x.id);const c=IANNA_COM_CICLO.crearCorte(ids,{periodo_inicio:'2026-07-01',periodo_fin:'2026-07-15'});const enCorte=ids.every(id=>comisionesNominaService.obtenerLinea(id).estado==='en_corte');const p=IANNA_COM_CICLO.pagarCorte(c.corte.id,{metodo:'Transferencia electrónica',referencia:'TEST'});const pagadas=ids.every(id=>comisionesNominaService.obtenerLinea(id).estado==='pagada');return {ids,c,enCorte,p,pagadas}})()`);
+  verdad(r.ids.length>0); verdad(r.c.ok); verdad(/^COR-/.test(r.c.corte.id_publico)); verdad(r.enCorte); verdad(r.p.ok); verdad(r.pagadas);
+});
+t('recomendación crea beneficiario externo identificable',()=>{
+  const r=X(`(()=>{const a=apartadosService.crear({prospectoId:_p1976.id,asesor:'u_test',estatus:'Venta',id_venta:'VEN-REC',politica_snapshot:_pol1976,financial_snapshot:{tipo_financiamiento:'contado',esquema_comision_id:'ESQ-CONTADO::recomendacion',esquema_pago_id:'ESQ-CONTADO',fuente_comision_id:'recomendacion',recomendador_nombre:'María Recomendadora',base_comisionable_snapshot:{precio_vivienda:3000000}},datos_cierre:{tipoCredito:'contado',recomendador_nombre:'María Recomendadora'}});return IANNA_COM_CICLO.activarVenta(a,{usuario:'u_test'})})()`);
+  verdad(r.ok); verdad(X("beneficiariosExternosService.listar().some(x=>x.nombre==='María Recomendadora')")); verdad(r.lineas.some(x=>x.rol==='tercero'&&x.beneficiario==='María Recomendadora'));
+});
+
 
 console.log('\n═════════════════════════════════════');
 console.log(`RESULTADO: ${ok} pasaron · ${mal} fallaron`);

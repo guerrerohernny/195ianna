@@ -114,9 +114,24 @@ window.configService = {
 // Fase 1.97.4 — comisiones devengadas, cortes y pagos de comisión.
 window.comisionesNominaService = {
   lineas: (f) => DS.find('comisiones_nomina', f),
+  obtenerLinea: (id) => DS.findOne('comisiones_nomina', id),
   crearLinea: (d) => DS.create('comisiones_nomina', d),
   actualizarLinea: (id,d) => DS.update('comisiones_nomina', id, d),
   cortes: (f) => DS.find('cortes_comision', f),
+  obtenerCorte: (id) => DS.findOne('cortes_comision', id),
   crearCorte: (d) => DS.create('cortes_comision', d),
   actualizarCorte: (id,d) => DS.update('cortes_comision', id, d),
+};
+
+window.beneficiariosExternosService = {
+  listar: (f) => DS.find('beneficiarios_externos', f),
+  obtener: (id) => DS.findOne('beneficiarios_externos', id),
+  crear: (d) => DS.create('beneficiarios_externos', d),
+  actualizar: (id,d) => DS.update('beneficiarios_externos', id, d),
+  obtenerOCrear(nombre,tipo){
+    const n=String(nombre||'').trim(); if(!n) return null;
+    const existente=(DS.find('beneficiarios_externos')||[]).find(x=>String(x.nombre||'').trim().toLowerCase()===n.toLowerCase()&&String(x.tipo||'').toLowerCase()===String(tipo||'Externo').toLowerCase());
+    if(existente) return existente;
+    return DS.create('beneficiarios_externos',{id_publico:IANNA_IDS.asignar('beneficiario'),nombre:n,tipo:tipo||'Externo',activo:true,fecha_alta:new Date().toISOString()});
+  }
 };

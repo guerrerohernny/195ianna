@@ -27,6 +27,9 @@ const DS = {
       params:{...MASTER_PARAMS},
       modelos:JSON.parse(JSON.stringify(MASTER_MOD)),
       brokers:[],
+      beneficiarios_externos:[],
+      comisiones_nomina:[],
+      cortes_comision:[],
       auditoria:[],
       cotizaciones:[],
       conversaciones:[],
@@ -67,10 +70,10 @@ const DS = {
       cancelaciones:(this.db.cancelaciones||[]).length,
     };
     // Conserva configuración maestra, usuarios, roles, modelos, brokers e integraciones.
-    ['inventario','prospectos','seguimientos','recordatorios','apartados','auditoria','cotizaciones','conversaciones','ledger','movimientos_financieros','comisiones','cancelaciones','oportunidades','operaciones','documentos','recibos','pagares'].forEach(k=>{ this.db[k]=[]; });
+    ['inventario','prospectos','seguimientos','recordatorios','apartados','auditoria','cotizaciones','conversaciones','ledger','movimientos_financieros','comisiones','comisiones_nomina','cortes_comision','beneficiarios_externos','cancelaciones','oportunidades','operaciones','documentos','recibos','pagares'].forEach(k=>{ this.db[k]=[]; });
     // Reinicia únicamente secuencias transaccionales; conserva ASE/GER/BRK ya asignados a maestros.
     if(!this.db.id_seq) this.db.id_seq={};
-    ['PRO','CLI','LOT','VEN','APT','PAG','REC','CON','CAN','COM','AUD','OPE'].forEach(k=>{ this.db.id_seq[k]=0; });
+    ['PRO','CLI','LOT','VEN','APT','PAG','REC','CON','CAN','COM','COR','BEN','AUD','OPE'].forEach(k=>{ this.db.id_seq[k]=0; });
     delete this.db.migracion_ids_v1;
     delete this.db.migracion_196_identidad;
     delete this.db.migracion_196_producto;
