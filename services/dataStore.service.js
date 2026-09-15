@@ -15,11 +15,9 @@ const DS = {
   _seed() {
     const db = {
       usuarios:[
-        {id:'u0',nombre:'Administrador PALIZ',correo:'admin@va.com',pass:'admin2026',rol:'administrador',telefono:'667 000 0000',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
-        {id:'u1',nombre:'José Rafael Patrón Osuna',correo:'gerente@va.com',pass:'1234',rol:'gerente',telefono:'667 426 5145',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
-        {id:'u2',nombre:'Ana López Martínez',correo:'asesor@va.com',pass:'1234',rol:'asesor',telefono:'667 111 2222',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
-        {id:'u3',nombre:'Roberto Sánchez Vega',correo:'roberto@va.com',pass:'1234',rol:'asesor',telefono:'667 333 4444',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
-        {id:'u4',nombre:'María García Torres',correo:'maria@va.com',pass:'1234',rol:'asesor',telefono:'667 555 6666',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
+        {id:'u0',id_publico:'GER-000001',nombre:'Administrador PALIZ',correo:'admin@va.com',pass:'admin2026',rol:'administrador',telefono:'',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
+        {id:'u1',id_publico:'GER-000002',nombre:'José Rafael Patrón Osuna',correo:'gerente@va.com',pass:'1234',rol:'gerente',telefono:'667 426 5145',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
+        {id:'u2',id_publico:'ASE-000001',nombre:'Hernny Guerrero',correo:'asesor@va.com',pass:'1234',rol:'asesor',telefono:'',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
       ],
       prospectos:[],seguimientos:[],recordatorios:[],
       inventario:[],
@@ -59,6 +57,60 @@ const DS = {
       this.db._ext.__migrado_v195=true; this._save(this.db);
     }catch(e){ console.error('migrarLlavesLegadas',e); }
   },
+  /* ── 1.97.6 CLEAN: reset de datos para pruebas end-to-end ──
+     Conserva parámetros, modelos, políticas e integraciones; elimina únicamente
+     datos operativos/transaccionales y deja tres usuarios autorizados.
+     Se ejecuta una sola vez por navegador al desplegar este paquete. */
+  aplicarResetPruebas1976Clean() {
+    const RESET_VERSION='1.97.6-clean-20260915';
+    if(this.db.reset_pruebas_version===RESET_VERSION) return false;
+
+    // Usuarios únicos acordados para la ronda limpia de pruebas.
+    this.db.usuarios=[
+      {id:'u0',id_publico:'GER-000001',nombre:'Administrador PALIZ',correo:'admin@va.com',pass:'admin2026',rol:'administrador',telefono:'',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
+      {id:'u1',id_publico:'GER-000002',nombre:'José Rafael Patrón Osuna',correo:'gerente@va.com',pass:'1234',rol:'gerente',telefono:'667 426 5145',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
+      {id:'u2',id_publico:'ASE-000001',nombre:'Hernny Guerrero',correo:'asesor@va.com',pass:'1234',rol:'asesor',telefono:'',activo:true,fechaAlta:new Date().toISOString(),avatar:''},
+    ];
+
+    // Datos operativos y de prueba: todo vuelve a cero.
+    const colecciones=[
+      'inventario','prospectos','seguimientos','recordatorios','apartados',
+      'auditoria','cotizaciones','conversaciones','ledger','movimientos_financieros',
+      'comisiones','comisiones_nomina','cortes_comision','beneficiarios_externos',
+      'cancelaciones','oportunidades','operaciones','documentos','recibos','pagares',
+      'historial_operaciones','folios_registro','brokers'
+    ];
+    colecciones.forEach(k=>{ this.db[k]=[]; });
+
+    // Reinicio de consecutivos transaccionales. GER/ASE reflejan los tres usuarios.
+    this.db.id_seq={
+      PRO:0,CLI:0,LOT:0,VEN:0,APT:0,PAG:0,REC:0,CON:0,CAN:0,COM:0,COR:0,BEN:0,AUD:0,OPE:0,
+      GER:2,ASE:1,BRK:0
+    };
+    this.db.folio_seq=0;
+
+    // Elimina respaldos de datos de pruebas antiguas, sin tocar configuración vigente.
+    delete this.db.backup_pre_196;
+
+    // Mantiene las migraciones funcionales/configuraciones existentes; evita que la
+    // migración de IDs vuelva a asignar IDs a los tres usuarios y genere ruido.
+    this.db.migracion_ids_v1={fecha:new Date().toISOString(),asignados:0,motivo:'Reset limpio 1.97.6'};
+    this.db.migracion_196_identidad={fecha:new Date().toISOString(),clientes:0,lotes:0,motivo:'Reset limpio 1.97.6'};
+    this.db.reset_pruebas_version=RESET_VERSION;
+    this.db.reset_pruebas_pendiente_limpieza_auditoria=true;
+    this._save(this.db);
+    return true;
+  },
+  finalizarResetPruebas1976Clean() {
+    if(!this.db.reset_pruebas_pendiente_limpieza_auditoria) return false;
+    // Algunas migraciones de compatibilidad pueden auditar durante el primer arranque.
+    // La ronda solicitada debe iniciar con Auditoría = 0.
+    this.db.auditoria=[];
+    delete this.db.reset_pruebas_pendiente_limpieza_auditoria;
+    this._save(this.db);
+    return true;
+  },
+
   aplicarBootstrapLimpio196() {
     if(this.db.bootstrap_limpio_196) return false;
     const antes={
