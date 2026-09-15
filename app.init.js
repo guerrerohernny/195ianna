@@ -5,6 +5,10 @@
    Fase 1.8: migración inicial de IDs permanentes (una sola vez).
    ════════════════════════════════════════════════════════════════ */
 
+// Reset de datos solicitado para reiniciar pruebas end-to-end sobre 1.97.6.
+// Conserva configuración funcional y se ejecuta una sola vez por navegador.
+try{ DS.aplicarResetPruebas1976Clean(); }catch(e){ console.error('Reset limpio 1.97.6',e); }
+
 // Migración inicial de identificadores permanentes (Fase 1.8) — corre una sola vez.
 try{ DS.aplicarBootstrapLimpio196(); }catch(e){ console.error('Bootstrap limpio 1.96',e); }
 try{ if(typeof IANNA_IDS!=='undefined'){ IANNA_IDS.migrar(); if(IANNA_IDS.migrar196) IANNA_IDS.migrar196(); } }catch(e){ console.error('Migración IDs',e); }
@@ -39,3 +43,4 @@ try{ if(typeof IANNA_MIG_1974!=='undefined') IANNA_MIG_1974.run(); }catch(e){ co
 
 try{ if(typeof IANNA_MIG_1975!=='undefined') IANNA_MIG_1975.run(); }catch(e){ console.error('[1.97.5] migración',e); }
 try{ if(typeof IANNA_MIG_1976!=='undefined') IANNA_MIG_1976.run(); }catch(e){ console.error('[1.97.6] migración',e); }
+try{ DS.finalizarResetPruebas1976Clean(); }catch(e){ console.error('Finalizar reset limpio 1.97.6',e); }
